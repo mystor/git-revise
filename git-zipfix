@@ -1,195 +1,44 @@
 #!/usr/bin/env python3
 
-import subprocess
-import textwrap
+# This file serves to bootstrap the zipfix executable. It performs version
+# checks, and loads the real zipfix module onto PATH.
+#
+# This file should be executable with most versions of python 2 & 3, however
+# zipfix requires python 3.6 to run.
+
 import os
 import sys
-import re
-from argparse import ArgumentParser
 
 
-class Signature(object):
-    sig_re = re.compile(rb'''
-        (?P<name>[^<>]+)<(?P<email>[^<>]+)>\s*
-        (?P<timestamp>[0-9]+)
-        (?:\s*(?P<offset>[\+\-][0-9]+))?
-        ''', re.X)
-
-    @classmethod
-    def parse(cls, spec):
-        match = cls.sig_re.fullmatch(spec)
-        return Signature(
-            match.group('name').strip(),
-            match.group('email').strip(),
-            int(match.group('timestamp').strip()),
-            match.group('offset').strip().decode('ascii'),
-        )
-
-    def __init__(self, name, email, timestamp, offset):
-        self.name = name
-        self.email = email
-        self.timestamp = timestamp
-        self.offset = offset
-
-    def __repr__(self):
-        return f"<Signature {self.name}, {self.email}, {self.timestamp}, {self.offset}>"
+# This particular file shouldn't be included. Include the library instead.
+if __name__ != '__main__':
+    raise RuntimeError('git-zipfix must be run as __main__')
 
 
-class Entry(object):
-    def __init__(self, mode, name, oid):
-        self.mode = mode
-        self.name = name
-        self.oid = oid
-
-    def obj(self):
-        return GitObj.get(self.oid)
-
-    def __repr__(self):
-        return f"<Entry {self.mode}, {self.name}, {self.oid}>"
+def upgrade_py(exe):
+    assert os.path.dirname(sys.executable) != exe
+    os.execvp(exe, [exe] + sys.argv[:])
+    raise RuntimeError('execvp failed')
 
 
-class GitObj(object):
-    cf_proc = None
-    o_cache = {}
-
-    @classmethod
-    def get(cls, ref):
-        # Coerce ref to bytes.
-        if isinstance(ref, str):
-            ref = ref.encode('utf-8')
-
-        # Check the cache before starting anything
-        if ref in GitObj.o_cache:
-            return GitObj.o_cache[ref]
-
-        # Spawn cat-file subprocess if it isn't running already.
-        if GitObj.cf_proc is None:
-            GitObj.cf_proc = subprocess.Popen(
-                ['git', 'cat-file', '--batch'],
-                bufsize=-1,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-            )
-
-        # Write out an object descriptor.
-        GitObj.cf_proc.stdin.write(ref + b'\n')
-        GitObj.cf_proc.stdin.flush()
-
-        # Read in the response.
-        oid, kind, size = GitObj.cf_proc.stdout.readline().split()
-        body = GitObj.cf_proc.stdout.read(int(size) + 1)[:-1]
-        assert int(size) == len(body), "bad size?"
-
-        # Double check read-in OID
-        if oid in GitObj.o_cache:
-            return GitObj.o_cache[oid]
-
-        # Build and return the new object
-        if kind == b'commit':
-            clazz = Commit
-        elif kind == b'tree':
-            clazz = Tree
-        elif kind == b'blob':
-            clazz = Blob
-        else:
-            raise ValueError(f"Unknown object kind: {kind}")
-
-        obj = clazz(oid.decode('ascii'), body)
-        GitObj.o_cache[oid] = obj
-
-        if not isinstance(obj, cls):
-            raise ValueError(f"Unexpected {clazz.__name__} {oid.decode('ascii')} "
-                             f"(expected {cls.__name__})")
-        return obj
-
-    def __init__(self, oid, body):
-        self.oid = oid
-        self.body = body
+# Perform basic python version checking, and attempt to locate a sufficiently
+# modern python interpreter.
+try:
+    ver = sys.version_info
+    if ver[0] < 3:
+        upgrade_py('python3')
+    elif ver[0] == 3 and ver[1] < 6:
+        upgrade_py('python3.6')
+except FileNotFoundError:
+    sys.stderr.write("error: zipfix requires Python >= 3.6 on $PATH\n")
+    sys.stderr.write("  current executable: %s\n" % sys.executable)
+    sys.stderr.write("  current version: %s\n" % sys.version)
+    sys.exit(101)
 
 
-class Commit(GitObj):
-    def __init__(self, oid, body):
-        GitObj.__init__(self, oid, body)
+# Add zipfix to the syspath, and load the module.
+libpath = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, libpath)
 
-        # Split the header from the core commit message.
-        hdrs, msg = self.body.split(b'\n\n', maxsplit=1)
-        self.msg = msg
-
-        # Parse the header to populate header metadata fields.
-        self.tree_oid = '0' * 40
-        self.parent_oids = []
-        self.author = None
-        self.committer = None
-
-        for hdr in re.split(br'\n(?! )', hdrs):
-            # Parse out the key-value pairs from the header, handling
-            # continuation lines.
-            key, value = hdr.split(maxsplit=1)
-            key = key.decode('ascii')
-            value = value.replace(b'\n ', b'\n')
-
-            if key == 'tree':
-                self.tree_oid = value.decode('ascii')
-            elif key == 'parent':
-                self.parent_oids.append(value.decode('ascii'))
-            elif key == 'author':
-                self.author = Signature.parse(value)
-            elif key == 'committer':
-                self.committer = Signature.parse(value)
-
-    def tree(self):
-        return Tree.get(self.tree_oid)
-
-    def parents(self):
-        return [Commit.get(parent) for parent in self.parent_oids]
-
-    def parent(self):
-        if len(self.parent_oids) != 1:
-            raise ValueError(f"Commit {self.oid} does not have a single parent")
-        return Commit.get(self.parent_oids[0])
-
-    def __repr__(self):
-        return (f"<Commit {self.oid} "
-                f"tree={self.tree_oid}, parents=[{', '.join(self.parent_oids)}], "
-                f"author={self.author}, committer={self.committer}>")
-
-
-class Tree(GitObj):
-    def __init__(self, oid, body):
-        GitObj.__init__(self, oid, body)
-
-        self.entries = []
-
-        rest = self.body
-        while len(rest) > 0:
-            mode, rest = rest.split(b' ', maxsplit=1)
-            path, rest = rest.split(b'\0', maxsplit=1)
-            oid = rest[:20]
-            rest = rest[20:]
-            self.entries.append(Entry(mode.decode('ascii'), path, oid.hex()))
-
-    def __repr__(self):
-        return f"<Tree {self.oid} ({len(self.entries)} entries)>"
-
-
-class Blob(GitObj):
-    def __repr__(self):
-        return f"<Blob {self.oid} ({len(self.body)} bytes)>"
-
-
-def main():
-    a = GitObj.get('HEAD')
-    print(a)
-    b = GitObj.get('HEAD')
-    print(b)
-
-    c = GitObj.get('0deedf7')
-    print(c)
-    print(c.tree())
-    for entry in c.tree().entries:
-        print(entry)
-        print(entry.obj())
-
-
-if __name__ == '__main__':
-    main()
+import zipfix
+zipfix.main(sys.argv[1:])
