@@ -1,44 +1,71 @@
 #!/usr/bin/env python3
 
-# This file serves to bootstrap the zipfix executable. It performs version
-# checks, and loads the real zipfix module onto PATH.
-#
-# This file should be executable with most versions of python 2 & 3, however
-# zipfix requires python 3.6 to run.
-
-import os
+from argparse import ArgumentParser
+from zipfix import Commit, Signature, commit_range, run_editor
 import sys
 
 
-# This particular file shouldn't be included. Include the library instead.
-if __name__ != '__main__':
-    raise RuntimeError('git-zipfix must be run as __main__')
+def parser() -> ArgumentParser:
+    parser = ArgumentParser(description='''\
+        Rebase staged changes onto the given commit, and rewrite history to
+        incorporate these changes.''')
+    parser.add_argument('target', help='target commit to apply fixups to')
+    parser.add_argument('--ref', default='HEAD', help='reference to update')
+    parser.add_argument('--no-index', action='store_true',
+                        help='ignore the index while rewriting history')
+    parser.add_argument('--reauthor', action='store_true',
+                        help='reset the author of the targeted commit')
+
+    msg_group = parser.add_mutually_exclusive_group()
+    msg_group.add_argument('--edit', '-e', action='store_true',
+                           help='edit commit message of targeted commit')
+    msg_group.add_argument('--message', '-m', action='append',
+                           help='specify commit message on command line')
+    return parser
 
 
-def upgrade_py(exe):
-    assert os.path.dirname(sys.executable) != exe
-    os.execvp(exe, [exe] + sys.argv[:])
-    raise RuntimeError('execvp failed')
+def main(argv):
+    args = parser().parse_args(argv)
+
+    head = Commit.get(args.ref)
+    current = replaced = Commit.get(args.target)
+    to_rebase = commit_range(current, head)
+
+    # If --no-index was not supplied, apply staged changes to the target.
+    if not args.no_index:
+        print(f"Applying changes to '{args.target}'")
+        index = Commit.from_index(b"git index").rebase(current)
+        current = current.update(tree=index.tree())
+
+    # Update the commit message on the target commit if requested.
+    if args.message:
+        fullmsg = b''.join(l.encode('utf-8') + b'\n' for l in args.message)
+        summary, rest = fullmsg.split(b'\n', 1)
+        current = current.update(
+            message=summary + b'\n\n' + rest.strip() + b'\n')
+
+    # Prompt the user to edit the commit message if requested.
+    if args.edit:
+        message = run_editor('COMMIT_EDITMSG', current.message, comments="""\
+            Please enter the commit message for your changes. Lines starting
+            with '#' will be ignored, and an empty message aborts the commit.
+            """)
+        current = current.update(message=message)
+
+    # Rewrite the author to match the current user if requested.
+    if args.reauthor:
+        current = current.update(author=Signature.default_author())
+
+    if current != replaced:
+        # Rebase commits atop the commit range.
+        for idx, commit in enumerate(to_rebase):
+            print(f"commit {idx + 1}/{len(to_rebase)}: {commit.oid}")
+            current = commit.rebase(current)
+
+        # Update the HEAD commit to point to the new value.
+        print(f"Updating {args.ref} ({head.oid} => {current.oid})")
+        current.update_ref(args.ref, "git-fixup rewrite", head.oid)
 
 
-# Perform basic python version checking, and attempt to locate a sufficiently
-# modern python interpreter.
-try:
-    ver = sys.version_info
-    if ver[0] < 3:
-        upgrade_py('python3')
-    elif ver[0] == 3 and ver[1] < 6:
-        upgrade_py('python3.6')
-except FileNotFoundError:
-    sys.stderr.write("error: zipfix requires Python >= 3.6 on $PATH\n")
-    sys.stderr.write("  current executable: %s\n" % sys.executable)
-    sys.stderr.write("  current version: %s\n" % sys.version)
-    sys.exit(101)
-
-
-# Add zipfix to the syspath, and load the module.
-libpath = os.path.dirname(os.path.realpath(__file__))
-sys.path.insert(0, libpath)
-
-import zipfix
-zipfix.main(sys.argv[1:])
+if __name__ == '__main__':
+    main(sys.argv[1:])

@@ -4,18 +4,14 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import subprocess
 import hashlib
-import tempfile
 import re
-from typing import TypeVar, Type, Dict, List, Union, NewType, Sequence, Optional
-from abc import ABC, abstractmethod
+from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, cast
+from enum import Enum
 
 
 class MissingObject(Exception):
     def __init__(self, ref: str):
         Exception.__init__(self, f"Object {ref} does not exist")
-
-
-VALID_MODES = (b'100644', b'100755', b'040000', b'120000')
 
 
 class Oid(bytes):
@@ -32,6 +28,12 @@ class Oid(bytes):
     def null(cls) -> 'Oid':
         return cls(b'\0' * 20)
 
+    @classmethod
+    def for_object(cls, tag: str, body: bytes):
+        m = hashlib.sha1()
+        m.update(tag.encode('ascii') + b' ' + str(len(body)).encode('ascii') + b'\0' + body)
+        return cls(m.digest())
+
     def __repr__(self) -> str:
         return self.hex()
 
@@ -39,8 +41,16 @@ class Oid(bytes):
         return self.hex()
 
 
-class Signature(object):
+class Signature:
+    name: bytes
+    email: bytes
+    timestamp: bytes
+    offset: bytes
+
     __slots__ = ('name', 'email', 'timestamp', 'offset')
+
+    _default_author: Optional['Signature'] = None
+    _default_committer: Optional['Signature'] = None
 
     sig_re = re.compile(rb'''
         (?P<name>[^<>]+)<(?P<email>[^<>]+)>[ ]
@@ -60,6 +70,22 @@ class Signature(object):
             match.group('offset').strip(),
         )
 
+    @classmethod
+    def default_author(cls) -> 'Signature':
+        if Signature._default_author is None:
+            rv = subprocess.run(['git', 'var', 'GIT_AUTHOR_IDENT'],
+                                check=True, stdout=subprocess.PIPE)
+            Signature._default_author = Signature.parse(rv.stdout.rstrip())
+        return Signature._default_author
+
+    @classmethod
+    def default_committer(cls) -> 'Signature':
+        if Signature._default_committer is None:
+            rv = subprocess.run(['git', 'var', 'GIT_COMMITTER_IDENT'],
+                                check=True, stdout=subprocess.PIPE)
+            Signature._default_committer = Signature.parse(rv.stdout.rstrip())
+        return Signature._default_committer
+
     def __init__(self, name: bytes, email: bytes, timestamp: bytes, offset: bytes):
         self.name = name
         self.email = email
@@ -73,177 +99,160 @@ class Signature(object):
         return f"<Signature {self.name}, {self.email}, {self.timestamp}, {self.offset}>"
 
 
-class Entry(object):
-    __slots__ = ('mode', 'name', 'obj_')
-
-    def __init__(self, mode: bytes, name: bytes, obj: Union[Oid, 'GitObj']):
-        self.mode = mode
-        self.name = name
-        self.obj_ = obj
-
-    def obj(self) -> 'GitObj':
-        if isinstance(self.obj_, GitObj):
-            return self.obj_
-        return GitObj.get(self.obj_)
-
-    def oid(self) -> Oid:
-        if isinstance(self.obj_, GitObj):
-            return self.obj_.oid
-        return self.obj_
-
-    def __repr__(self):
-        return f"<Entry {self.mode}, {self.name}, {self.obj_}>"
-
-
 GitObjT = TypeVar('GitObjT', bound='GitObj')
 
-class GitObj(ABC):
-    __slots__ = ('oid',)
 
-    cf_proc = None
-    ho_proc: Dict[str, Optional[subprocess.Popen]] = {
-        'commit': None,
-        'tree': None,
-        'blob': None,
-    }
+class GitObj:
+    tag: str
+    body: bytes
+    oid: Oid
+    persisted: bool
+
+    __slots__ = ('tag', 'body', 'persisted', 'oid')
+
     o_cache: Dict[Oid, 'GitObj'] = {}
 
-    @classmethod
-    def _get_existing(cls: Type[GitObjT], key: Oid) -> GitObjT:
-        obj = GitObj.o_cache[key]
-        if not isinstance(obj, cls):
-            raise ValueError(f"Unexpected {type(obj).__name__} "
-                             f"{obj.oid} (expected {cls.__name__})")
-        return obj
+    def __new__(cls, body: bytes):
+        tag = cls.__name__.lower()
+        oid = Oid.for_object(tag, body)
+        if oid in GitObj.o_cache:
+            return GitObj.o_cache[oid]
+
+        self = super().__new__(cls)
+        self.tag = tag
+        self.body = body
+        self.oid = oid
+        self.persisted = False
+        GitObj.o_cache[oid] = self
+        self.parse_body()
+        return self
 
     @classmethod
     def get(cls: Type[GitObjT], ref: Union[str, Oid]) -> GitObjT:
         # If we have an OID, check the cache first, otherwise, convert it to a
         # hex string for passing to cat-file.
         if isinstance(ref, Oid):
-            try:
-                return cls._get_existing(ref)
-            except KeyError:
-                ref = ref.hex()
+            if ref in GitObj.o_cache:
+                obj: GitObj = GitObj.o_cache[ref]
+                if not isinstance(obj, cls):
+                    raise ValueError(f"Unexpected {type(obj).__name__} "
+                                    f"{obj.oid} (expected {cls.__name__})")
+                return obj
+
+            ref = ref.hex()
 
         # Spawn cat-file subprocess if it isn't running already.
-        if GitObj.cf_proc is None:
-            GitObj.cf_proc = subprocess.Popen(
-                ['git', 'cat-file', '--batch'],
-                bufsize=-1,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-            )
+        try:
+            catfile: subprocess.Popen = getattr(GitObj, 'catfile_')
+        except AttributeError:
+            catfile = subprocess.Popen(['git', 'cat-file', '--batch'],
+                                       bufsize=-1,
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE)
+            setattr(GitObj, 'catfile_', catfile)
 
         # Write out an object descriptor.
-        GitObj.cf_proc.stdin.write(ref.encode('ascii') + b'\n')
-        GitObj.cf_proc.stdin.flush()
+        catfile.stdin.write(ref.encode('ascii') + b'\n')
+        catfile.stdin.flush()
 
         # Read in the response.
-        response = GitObj.cf_proc.stdout.readline().split()
+        response = catfile.stdout.readline().split()
         if len(response) < 3:
             assert response[1] == b'missing'
             raise MissingObject(ref)
 
-        oid_bytes, kind, size = response
-        body = GitObj.cf_proc.stdout.read(int(size) + 1)[:-1]
+        oid_hex, kind, size = response
+        oid = Oid.fromhex(oid_hex.decode('ascii'))
+        body = catfile.stdout.read(int(size) + 1)[:-1]
         assert int(size) == len(body), "bad size?"
 
-        oid = Oid.fromhex(oid_bytes.decode('ascii'))
+        # Create a corresponding git object. This will re-use the item in the
+        # cache, if found, and add the item to the cache otherwise.
+        if kind == b'commit':
+            obj = Commit(body)
+        elif kind == b'tree':
+            obj = Tree(body)
+        elif kind == b'blob':
+            obj = Blob(body)
+        else:
+            raise ValueError(f"Unknown object kind: {kind}")
 
-        # If the retrieved object is not in the cache, add it.
-        if oid not in GitObj.o_cache:
-            if kind == b'commit':
-                GitObj.o_cache[oid] = Commit.parse(oid, body)
-            elif kind == b'tree':
-                GitObj.o_cache[oid] = Tree.parse(oid, body)
-            elif kind == b'blob':
-                GitObj.o_cache[oid] = Blob.parse(oid, body)
-            else:
-                raise ValueError(f"Unknown object kind: {kind}")
-
-        obj = cls._get_existing(oid)
         obj.persisted = True
+        assert obj.oid == oid, "miscomputed oid"
+        if not isinstance(obj, cls):
+            raise ValueError(f"Unexpected {type(obj).__name__} "
+                             f"{obj.oid} (expected {cls.__name__})")
         return obj
 
-    def raw_hash(self) -> Oid:
-        m = hashlib.sha1()
-        m.update(self.raw())
-        oid = Oid(m.digest())
-        assert self.oid == Oid.null() or \
-            self.oid == oid, "bad round-trip"
-        return oid
+    def persist(self):
+        if self.persisted:
+            return
 
-    def raw_hash_call(self) -> Oid:
-        tag = self.__class__.__name__.lower().encode('ascii')
-        proc = subprocess.run(
-            ['git', 'hash-object', '-t', tag, '--stdin'],
-            check=True, input=self.raw_body(),
-            stdout=subprocess.PIPE,
-        )
-        return Oid.fromhex(proc.stdout.rstrip().decode('ascii'))
+        self.persist_deps()
+        new_oid = subprocess.run(['git', 'hash-object', '--no-filters',
+                                  '-t', self.tag, '-w', '--stdin'],
+                                 input=self.body, check=True,
+                                 stdout=subprocess.PIPE).stdout.rstrip()
+        assert Oid.fromhex(new_oid.decode('ascii')) == self.oid
+        self.persisted = True
 
-    def raw_hash_many(self) -> Oid:
-        tag = self.__class__.__name__.lower()
+    def persist_deps(self): ...
 
-        proc = GitObj.ho_proc[tag]
-        if proc is None:
-            proc = GitObj.ho_proc[tag] = subprocess.Popen(
-                ['git', 'hash-object', '-t', tag, '--stdin-paths', '--no-filters'],
-                bufsize=-1,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-            )
+    def parse_body(self): ...
 
-        with tempfile.NamedTemporaryFile() as tf:
-            tf.write(self.raw_body())
-            tf.flush()
-            proc.stdin.write(tf.name.encode() + b'\n')
-            proc.stdin.flush()
-            return Oid.fromhex(proc.stdout.readline().rstrip().decode('ascii'))
-
-    def raw(self) -> bytes:
-        tag = self.__class__.__name__.lower().encode('ascii')
-        assert tag in (b'commit', b'tree', b'blob')
-
-        body = self.raw_body()
-        len_bytes = str(len(body)).encode('ascii')
-        return tag + b' ' + len_bytes + b'\0' + body
-
-    @abstractmethod
-    def raw_body(self) -> bytes:
-        pass
-
-    def __init__(self, oid: Oid):
-        self.oid = oid
-        self.persisted = False
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, GitObj):
+            return self.oid == other.oid
+        return False
 
 
 class Commit(GitObj):
-    __slots__ = ('tree_', 'parents_', 'author', 'committer', 'message')
+    tree_oid: Oid
+    parent_oids: Sequence[Oid]
+    author: Signature
+    committer: Signature
+    message: bytes
 
-    def __init__(self,
-                 tree: Union[Oid, 'Tree'],
-                 parents: Sequence[Union[Oid, 'Commit']],
-                 author: Signature,
-                 committer: Signature,
-                 message: bytes,
-                 oid: Oid = Oid.null()):
-        GitObj.__init__(self, oid)
-        self.tree_ = tree
-        self.parents_ = parents
-        self.author = author
-        self.committer = committer
-        self.message = message
+    __slots__ = ('tree_oid', 'parent_oids', 'author', 'committer', 'message')
 
     @classmethod
-    def parse(cls, oid: Oid, body: bytes) -> 'Commit':
+    def create(cls,
+               tree_oid: Oid,
+               parent_oids: Sequence[Oid],
+               message: bytes,
+               author: Optional[Signature] = None,
+               committer: Optional[Signature] = None) -> 'Commit':
+        """Directly create an in-memory commit object, without persisting it.
+        If a commit object with these properties already exists, it will be
+        returned instead."""
+        if author is None:
+            author = Signature.default_author()
+        if committer is None:
+            committer = Signature.default_committer()
+
+        body = b'tree ' + tree_oid.hex().encode('ascii') + b'\n'
+        for parent in parent_oids:
+            body += b'parent ' + parent.hex().encode('ascii') + b'\n'
+        body += b'author ' + author.raw() + b'\n'
+        body += b'committer ' + committer.raw() + b'\n'
+        body += b'\n'
+        body += message
+        return Commit(body)
+
+    @classmethod
+    def head(cls) -> 'Commit':
+        return Commit.get('HEAD')
+
+    @classmethod
+    def from_index(cls, message: bytes = b'<git index>') -> 'Commit':
+        return Commit.create(Tree.from_index().oid, [Commit.head().oid], message)
+
+    def parse_body(self):
         # Split the header from the core commit message.
-        hdrs, msg = body.split(b'\n\n', maxsplit=1)
+        hdrs, self.message = self.body.split(b'\n\n', maxsplit=1)
 
         # Parse the header to populate header metadata fields.
-        parents: List[Oid] = []
-
+        self.parent_oids = []
         for hdr in re.split(br'\n(?! )', hdrs):
             # Parse out the key-value pairs from the header, handling
             # continuation lines.
@@ -251,95 +260,166 @@ class Commit(GitObj):
             value = value.replace(b'\n ', b'\n')
 
             if key == b'tree':
-                tree = Oid.fromhex(value.decode())
+                self.tree_oid = Oid.fromhex(value.decode())
             elif key == b'parent':
-                parents.append(Oid.fromhex(value.decode()))
+                self.parent_oids.append(Oid.fromhex(value.decode()))
             elif key == b'author':
-                author = Signature.parse(value)
+                self.author = Signature.parse(value)
             elif key == b'committer':
-                committer = Signature.parse(value)
+                self.committer = Signature.parse(value)
             else:
                 raise ValueError('Unknown commit header: ' + key.decode())
 
-        return Commit(tree, parents, author, committer, msg, oid)
-
     def tree(self) -> 'Tree':
-        if isinstance(self.tree_, Tree):
-            return self.tree_
-        return Tree.get(self.tree_)
+        return Tree.get(self.tree_oid)
 
     def parents(self) -> Sequence['Commit']:
-        return [
-            parent if isinstance(parent, Commit) else Commit.get(parent)
-            for parent in self.parents_
-        ]
+        return [Commit.get(parent) for parent in self.parent_oids]
 
     def parent(self) -> 'Commit':
         if len(self.parents()) != 1:
-            raise ValueError(f"Commit {self.oid} does not have a single parent")
+            raise ValueError(
+                f"Commit {self.oid} has {len(self.parents())} parents")
         return self.parents()[0]
 
-    def raw_body(self) -> bytes:
-        body = b'tree ' + self.tree().oid.hex().encode('ascii') + b'\n'
-        for parent in self.parents():
-            body += b'parent ' + parent.oid.hex().encode('ascii') + b'\n'
-        body += b'author ' + self.author.raw() + b'\n'
-        body += b'committer ' + self.committer.raw() + b'\n'
+    def rebase(self, parent: 'Commit') -> 'Commit':
+        from .merge import rebase
+        return rebase(self, parent)
 
-        body += b'\n'
-        body += self.message
-        return body
+    def update(self,
+               tree: Optional['Tree'] = None,
+               parents: Optional[Sequence['Commit']] = None,
+               message: Optional[bytes] = None,
+               author: Optional[Signature] = None) -> 'Commit':
+        # Compute parameters used to create the new object.
+        tree_oid = tree.oid if tree else self.tree_oid
+        parent_oids = [p.oid for p in parents] \
+            if parents else self.parent_oids
+        if message is None:
+            message = self.message
+        if author is None:
+            author = self.author
+
+        # Check if the commit was unchanged.
+        unchanged = (tree_oid == self.tree_oid and
+                     parent_oids == self.parent_oids and
+                     message == self.message and
+                     author == self.author)
+        if unchanged:
+            return self
+        return Commit.create(tree_oid, parent_oids, message, author)
+
+    def update_ref(self, ref: str, reason: str, current: Optional[Oid]):
+        self.persist()
+        args = ['git', 'update-ref', '-m', reason, ref, str(self.oid)]
+        if current is not None:
+            args.append(str(current))
+        subprocess.run(args, check=True)
+
+    def persist_deps(self):
+        self.tree().persist()
+        for parent in self.parents():
+            parent.persist()
 
     def __repr__(self) -> str:
         return (f"<Commit {self.oid} "
-                f"tree={self.tree_}, parents={self.parents_}, "
+                f"tree={self.tree_oid}, parents={self.parent_oids}, "
                 f"author={self.author}, committer={self.committer}>")
 
 
+class Mode(Enum):
+    GITLINK = b'160000'
+    SYMLINK = b'120000'
+    DIR = b'40000'
+    REGULAR = b'100644'
+    EXEC = b'100755'
+
+    def is_file(self) -> bool:
+        return self in (Mode.REGULAR, Mode.EXEC)
+
+
+class Entry(object):
+    mode: Mode
+    oid: Oid
+
+    __slots__ = ('mode', 'oid')
+
+    def __init__(self, mode: Mode, oid: Oid):
+        self.mode = mode
+        self.oid = oid
+
+    def blob(self) -> 'Blob':
+        if self.mode in (Mode.REGULAR, Mode.EXEC):
+            return Blob.get(self.oid)
+        return Blob.empty()
+
+    def symlink(self) -> bytes:
+        if self.mode == Mode.SYMLINK:
+            return Blob.get(self.oid).body
+        return b'<non-symlink>'
+
+    def tree(self) -> 'Tree':
+        if self.mode == Mode.DIR:
+            return Tree.get(self.oid)
+        return Tree.empty()
+
+    def __repr__(self):
+        return f"<Entry {self.mode}, {self.oid}>"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Entry):
+            return self.mode == other.mode and self.oid == other.oid
+        return False
+
+
 class Tree(GitObj):
+    entries: Dict[bytes, Entry]
+
     __slots__ = ('entries',)
 
-    def __init__(self, entries: Sequence[Entry], oid: Oid = Oid.null()):
-        GitObj.__init__(self, oid)
-        self.entries = entries
+    @classmethod
+    def create(cls, entries: Mapping[bytes, Entry]) -> 'Tree':
+        body = b''
+        for name, entry in sorted(entries.items(), key=lambda i: i[0]):
+            body += cast(bytes, entry.mode.value) + b' ' + name + b'\0' + entry.oid
+        return Tree(body)
 
     @classmethod
-    def parse(cls, oid: Oid, body: bytes) -> 'Tree':
-        entries: List[Entry] = []
-        while len(body) > 0:
-            mode, body = body.split(b' ', maxsplit=1)
-            path, body = body.split(b'\0', maxsplit=1)
-            entry_oid = Oid(body[:20])
-            body = body[20:]
-            entries.append(Entry(mode, path, entry_oid))
-        return Tree(entries, oid)
+    def empty(cls) -> 'Tree':
+        return Tree(b'')
 
-    def raw_body(self) -> bytes:
-        body = b''
-        for entry in sorted(self.entries, key=lambda e: e.name):
-            assert b'\0' not in entry.name, "Name cannot contain null byte"
-            assert entry.mode in VALID_MODES, "Mode is not valid"
-            body += entry.mode + b' ' + entry.name + b'\0' + entry.oid()
-        return body
+    @classmethod
+    def from_index(cls) -> 'Tree':
+        written = subprocess.run(['git', 'write-tree'],
+                                 check=True,
+                                 stdout=subprocess.PIPE)
+        oid = Oid.fromhex(written.stdout.rstrip().decode())
+        return Tree.get(oid)
+
+    def parse_body(self):
+        self.entries = {}
+        rest = self.body
+        while len(rest) > 0:
+            mode, rest = rest.split(b' ', maxsplit=1)
+            name, rest = rest.split(b'\0', maxsplit=1)
+            entry_oid = Oid(rest[:20])
+            rest = rest[20:]
+            self.entries[name] = Entry(Mode(mode), entry_oid)
+
+    def persist_deps(self):
+        for entry in self.entries.values():
+            entry.obj().persist()
 
     def __repr__(self) -> str:
         return f"<Tree {self.oid} ({len(self.entries)} entries)>"
 
 
 class Blob(GitObj):
-    __slots__ = ('body',)
-
-    def __init__(self, body: bytes, oid: Oid = Oid.null()):
-        GitObj.__init__(self, oid)
-        self.body = body
+    __slots__ = ()
 
     @classmethod
-    def parse(cls, oid: Oid, body: bytes) -> 'Blob':
-        return Blob(body, oid)
-
-    def raw_body(self) -> bytes:
-        return self.body
+    def empty(cls) -> 'Blob':
+        return Blob(b'')
 
     def __repr__(self) -> str:
         return f"<Blob {self.oid} ({len(self.body)} bytes)>"
-
