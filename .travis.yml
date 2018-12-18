@@ -5,8 +5,7 @@ python:
   - "3.6"
 
 install:
-  - travis_retry pip install flake8 mypy
+  - travis_retry pip install mypy
 
 script:
-  - flake8
   - mypy zipfix
