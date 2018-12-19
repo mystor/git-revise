@@ -5,7 +5,7 @@ Helper classes for reading cached objects from Git's Object Database.
 import subprocess
 import hashlib
 import re
-from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, cast
+from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
 from enum import Enum
 
 
@@ -111,6 +111,7 @@ class GitObj:
     __slots__ = ('tag', 'body', 'persisted', 'oid')
 
     o_cache: Dict[Oid, 'GitObj'] = {}
+    catfile: Optional[subprocess.Popen] = None
 
     def __new__(cls, body: bytes):
         tag = cls.__name__.lower()
@@ -142,14 +143,12 @@ class GitObj:
             ref = ref.hex()
 
         # Spawn cat-file subprocess if it isn't running already.
-        try:
-            catfile: subprocess.Popen = getattr(GitObj, 'catfile_')
-        except AttributeError:
-            catfile = subprocess.Popen(['git', 'cat-file', '--batch'],
-                                       bufsize=-1,
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE)
-            setattr(GitObj, 'catfile_', catfile)
+        if GitObj.catfile is None:
+            GitObj.catfile = subprocess.Popen(['git', 'cat-file', '--batch'],
+                                              bufsize=-1,
+                                              stdin=subprocess.PIPE,
+                                              stdout=subprocess.PIPE)
+        catfile = GitObj.catfile
 
         # Write out an object descriptor.
         catfile.stdin.write(ref.encode('ascii') + b'\n')
@@ -363,6 +362,10 @@ class Entry(object):
             return Tree.get(self.oid)
         return Tree.empty()
 
+    def persist(self):
+        if self.mode != Mode.GITLINK:
+            GitObj.get(self.oid).persist()
+
     def __repr__(self):
         return f"<Entry {self.mode}, {self.oid}>"
 
@@ -379,8 +382,16 @@ class Tree(GitObj):
 
     @classmethod
     def create(cls, entries: Mapping[bytes, Entry]) -> 'Tree':
+        def entry_key(pair: Tuple[bytes, Entry]) -> bytes:
+            name, entry = pair
+            # Directories are sorted in the tree listing as though they have a
+            # trailing slash in their name.
+            if entry.mode == Mode.DIR:
+                return name + b'/'
+            return name
+
         body = b''
-        for name, entry in sorted(entries.items(), key=lambda i: i[0]):
+        for name, entry in sorted(entries.items(), key=entry_key):
             body += cast(bytes, entry.mode.value) + b' ' + name + b'\0' + entry.oid
         return Tree(body)
 
@@ -408,7 +419,7 @@ class Tree(GitObj):
 
     def persist_deps(self):
         for entry in self.entries.values():
-            entry.obj().persist()
+            entry.persist()
 
     def __repr__(self) -> str:
         return f"<Tree {self.oid} ({len(self.entries)} entries)>"
