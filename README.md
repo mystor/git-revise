@@ -56,13 +56,10 @@ update either the index or working directory during rebases.
 I did a simple test, applying a single-line change to a commit 11 patches up
 the stack. The following are my extremely non-scientific time measurements:
 
-+------------------------------+-----------+
 | Command                      | Real Time |
-+------------------------------+-----------+
+| ---------------------------- | --------- |
 | `git rebase -i --autosquash` | 16.931s   |
-+------------------------------+-----------+
 | `git zipfix`                 | 0.541s    |
-+------------------------------+-----------+
 
 The following are the commands I ran:
 
