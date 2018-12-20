@@ -5,6 +5,7 @@ in-memory merges and rebases.
 """
 
 from typing import Tuple, List, Optional
+from argparse import ArgumentParser
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ import sys
 
 # Re-export primitives from the odb module to expose them at the root.
 from .odb import MissingObject, Oid, Signature, GitObj, Commit, Mode, Entry, Tree, Blob
+
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
     """Oldest-first iterator over the given commit range,
@@ -23,6 +25,7 @@ def commit_range(base: Commit, tip: Commit) -> List[Commit]:
         tip = tip.parent()
     commits.reverse()
     return commits
+
 
 def run_editor(filename: str, text: bytes,
                comments: Optional[str] = None,
@@ -60,3 +63,74 @@ def run_editor(filename: str, text: bytes,
             print("empty file - aborting", file=sys.stderr)
             sys.exit(1)
         return data
+
+
+def parser() -> ArgumentParser:
+    parser = ArgumentParser(description='''\
+        Rebase staged changes onto the given commit, and rewrite history to
+        incorporate these changes.''')
+    parser.add_argument('target', help='target commit to apply fixups to')
+    parser.add_argument('--ref', default='HEAD', help='reference to update')
+    parser.add_argument('--no-index', action='store_true',
+                        help='ignore the index while rewriting history')
+    parser.add_argument('--reauthor', action='store_true',
+                        help='reset the author of the targeted commit')
+
+    msg_group = parser.add_mutually_exclusive_group()
+    msg_group.add_argument('--edit', '-e', action='store_true',
+                           help='edit commit message of targeted commit')
+    msg_group.add_argument('--message', '-m', action='append',
+                           help='specify commit message on command line')
+    return parser
+
+
+def main(argv):
+    args = parser().parse_args(argv)
+
+    final = head = Commit.get(args.ref)
+    current = replaced = Commit.get(args.target)
+    to_rebase = commit_range(current, head)
+
+    # If --no-index was not supplied, apply staged changes to the target.
+    if not args.no_index:
+        print(f"Applying staged changes to '{args.target}'")
+        final = Commit.from_index(b"git index")
+        current = current.update(tree=final.rebase(current).tree())
+
+    # Update the commit message on the target commit if requested.
+    if args.message:
+        message = b'\n'.join(l.encode('utf-8') + b'\n' for l in args.message)
+        current = current.update(message=message)
+
+    # Prompt the user to edit the commit message if requested.
+    if args.edit:
+        message = run_editor('COMMIT_EDITMSG', current.message, comments="""\
+            Please enter the commit message for your changes. Lines starting
+            with '#' will be ignored, and an empty message aborts the commit.
+            """)
+        current = current.update(message=message)
+
+    # Rewrite the author to match the current user if requested.
+    if args.reauthor:
+        current = current.update(author=Signature.default_author())
+
+    if current != replaced:
+        # Rebase commits atop the commit range.
+        for idx, commit in enumerate(to_rebase):
+            print(f"Reparenting commit {idx + 1}/{len(to_rebase)}: {commit.oid}")
+            current = commit.rebase(current)
+
+        # Update the HEAD commit to point to the new value.
+        print(f"Updating {args.ref} ({head.oid} => {current.oid})")
+        current.update_ref(args.ref, "git-zipfix rewrite", head.oid)
+
+        # We expect our tree to match the tree we started with (including index
+        # changes). If it does not, print out a warning.
+        if current.tree() != final.tree():
+            print("(warning) unexpected final tree\n"
+                  f"(note) expected: {final.tree().oid}\n"
+                  f"(note) actual: {current.tree().oid}\n"
+                  "(note) working directory & index have not been updated.\n"
+                  "(note) use `git status` to see what has changed.",
+                  file=sys.stderr)
+            sys.exit(1)
