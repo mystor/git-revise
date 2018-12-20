@@ -3,9 +3,10 @@ sudo: false
 language: python
 python:
   - "3.6"
+  - "3.7"
 
 install:
-  - travis_retry pip install mypy
+  - travis_retry pip install tox-travis
 
 script:
-  - mypy zipfix
+  - tox
