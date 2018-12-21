@@ -71,12 +71,14 @@ def parser() -> ArgumentParser:
         incorporate these changes.''')
     parser.add_argument('target', help='target commit to apply fixups to')
     parser.add_argument('--ref', default='HEAD', help='reference to update')
-    parser.add_argument('--no-index', action='store_true',
-                        help='ignore the index while rewriting history')
     parser.add_argument('--reauthor', action='store_true',
                         help='reset the author of the targeted commit')
-    parser.add_argument('--all', '-a', action='store_true',
-                        help='stage all tracked files before running')
+
+    index_group = parser.add_mutually_exclusive_group()
+    index_group.add_argument('--no-index', action='store_true',
+                             help='ignore the index while rewriting history')
+    index_group.add_argument('--all', '-a', action='store_true',
+                             help='stage all tracked files before running')
 
     msg_group = parser.add_mutually_exclusive_group()
     msg_group.add_argument('--edit', '-e', action='store_true',
