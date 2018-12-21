@@ -75,6 +75,8 @@ def parser() -> ArgumentParser:
                         help='ignore the index while rewriting history')
     parser.add_argument('--reauthor', action='store_true',
                         help='reset the author of the targeted commit')
+    parser.add_argument('--all', '-a', action='store_true',
+                        help='stage all tracked files before running')
 
     msg_group = parser.add_mutually_exclusive_group()
     msg_group.add_argument('--edit', '-e', action='store_true',
@@ -90,6 +92,12 @@ def main(argv):
     final = head = Commit.get(args.ref)
     current = replaced = Commit.get(args.target)
     to_rebase = commit_range(current, head)
+
+    if args.all:
+        print("Staging all changes")
+        if subprocess.run([ "git", "add", "-u" ]).returncode != 0:
+            print("Couldn't stage changes", file=sys.stderr)
+            sys.exit(1)
 
     # If --no-index was not supplied, apply staged changes to the target.
     if not args.no_index:
