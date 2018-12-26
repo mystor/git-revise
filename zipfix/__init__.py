@@ -13,7 +13,7 @@ import textwrap
 import sys
 
 # Re-export primitives from the odb module to expose them at the root.
-from .odb import MissingObject, Oid, Signature, GitObj, Commit, Mode, Entry, Tree, Blob
+from .odb import MissingObject, Oid, Signature, Repository, GitObj, Commit, Mode, Entry, Tree, Blob
 
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
@@ -91,8 +91,10 @@ def parser() -> ArgumentParser:
 def main(argv):
     args = parser().parse_args(argv)
 
-    final = head = Commit.get(args.ref)
-    current = replaced = Commit.get(args.target)
+    repo = Repository()
+
+    final = head = repo.getcommit(args.ref)
+    current = replaced = repo.getcommit(args.target)
     to_rebase = commit_range(current, head)
 
     if args.all:
@@ -104,7 +106,7 @@ def main(argv):
     # If --no-index was not supplied, apply staged changes to the target.
     if not args.no_index:
         print(f"Applying staged changes to '{args.target}'")
-        final = Commit.from_index(b"git index")
+        final = repo.commit_staged(b"<git index>")
         current = current.update(tree=final.rebase(current).tree())
 
     # Update the commit message on the target commit if requested.
@@ -122,7 +124,7 @@ def main(argv):
 
     # Rewrite the author to match the current user if requested.
     if args.reauthor:
-        current = current.update(author=Signature.default_author())
+        current = current.update(author=repo.default_author)
 
     if current != replaced:
         # Rebase commits atop the commit range.

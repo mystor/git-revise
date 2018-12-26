@@ -33,7 +33,7 @@ def rebase(commit: Commit, parent: Commit) -> Commit:
     # NOTE: This omits commit.committer to pull it from the environment. This
     # means that created commits may vary between invocations, but due to
     # caching, should be consistent within a single process.
-    return Commit.create(tree.oid, [parent.oid], commit.message, commit.author)
+    return tree.repo.new_commit(tree, [parent], commit.message, commit.author)
 
 
 def conflict_prompt(path: Path, descr: str,
@@ -68,7 +68,7 @@ def merge_trees(path: Path,
                                other.entries.get(name))
         if merged is not None:
             entries[name] = merged
-    return Tree.create(entries)
+    return current.repo.new_tree(entries)
 
 
 def merge_entries(path: Path,
@@ -115,16 +115,16 @@ def merge_entries(path: Path,
         baseblob = None
         if base and base.mode.is_file():
             baseblob = base.blob()
-        return Entry(mode, merge_blobs(path, labels,
-                                       current.blob(),
-                                       baseblob,
-                                       other.blob()).oid)
+        return Entry(current.repo, mode, merge_blobs(path, labels,
+                                                     current.blob(),
+                                                     baseblob,
+                                                     other.blob()).oid)
     elif mode == Mode.DIR:
-        basetree = Tree.empty()
+        basetree = current.repo.new_tree({})
         if base and base.mode == Mode.DIR:
             basetree = base.tree()
-        return Entry(mode, merge_trees(path, labels, current.tree(),
-                                       basetree, other.tree()).oid)
+        return Entry(current.repo, mode, merge_trees(path, labels, current.tree(),
+                                                     basetree, other.tree()).oid)
     elif mode == Mode.SYMLINK:
         return conflict_prompt(path, "Symlink", labels,
                                current, current.symlink().decode(),
@@ -167,7 +167,7 @@ def merge_blobs(path: Path,
         # negative if there was an error, and the positive number of conficts
         # if there were conflicts.
         if process.returncode == 0:
-            return Blob(process.stdout)
+            return Blob(current.repo, process.stdout)
         elif process.returncode < 0:
             raise MergeConflict("git merge-file errored")
 
@@ -185,4 +185,4 @@ def merge_blobs(path: Path,
             raise MergeConflict("merging failed")
 
         with open(tmpdir / 'merged', 'rb') as f:
-            return Blob(f.read())
+            return Blob(current.repo, f.read())
