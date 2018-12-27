@@ -2,12 +2,12 @@
 Helper classes for reading cached objects from Git's Object Database.
 """
 
-import subprocess
 import hashlib
 import re
 from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
 from pathlib import Path
 from enum import Enum
+from subprocess import Popen, run, PIPE
 
 
 class MissingObject(Exception):
@@ -61,12 +61,10 @@ class Signature:
         match = cls.sig_re.fullmatch(spec)
         assert match is not None, "Invalid Signature"
 
-        return Signature(
-            match.group('name').strip(),
-            match.group('email').strip(),
-            match.group('timestamp').strip(),
-            match.group('offset').strip(),
-        )
+        return Signature(match.group('name').strip(),
+                         match.group('email').strip(),
+                         match.group('timestamp').strip(),
+                         match.group('offset').strip())
 
     def __init__(self, name: bytes, email: bytes, timestamp: bytes, offset: bytes):
         self.name = name
@@ -86,23 +84,25 @@ class Repository:
     default_author: 'Signature'
     default_committer: 'Signature'
     objects: Dict[Oid, 'GitObj']
-    catfile: subprocess.Popen
+    catfile: Popen
 
     def __init__(self, workdir: Optional[Path] = None):
         self.workdir = Path.cwd() if workdir is None else workdir
 
         # XXX(nika): Does it make more sense to cache these or call every time?
         # Cache for length of time & invalidate?
-        self.default_author = \
-            Signature.parse(self.git(['var', 'GIT_AUTHOR_IDENT']).rstrip())
-        self.default_committer = \
-            Signature.parse(self.git(['var', 'GIT_COMMITTER_IDENT']).rstrip())
+        self.default_author = Signature.parse(run(
+            ['git', 'var', 'GIT_AUTHOR_IDENT'],
+            stdout=PIPE, cwd=self.workdir, check=True
+        ).stdout.rstrip())
+        self.default_committer = Signature.parse(run(
+            ['git', 'var', 'GIT_COMMITTER_IDENT'],
+            stdout=PIPE, cwd=self.workdir, check=True
+        ).stdout.rstrip())
 
-        self.catfile = subprocess.Popen(['git', 'cat-file', '--batch'],
-                                        bufsize=-1,
-                                        stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE,
-                                        cwd=self.workdir)
+        self.catfile = Popen(['git', 'cat-file', '--batch'],
+                             bufsize=-1, stdin=PIPE, stdout=PIPE,
+                             cwd=self.workdir)
         self.objects = {}
 
     def new_commit(self,
@@ -143,23 +143,13 @@ class Repository:
         return Tree(self, body)
 
     def index_tree(self) -> 'Tree':
-        written = subprocess.run(['git', 'write-tree'],
-                                 check=True,
-                                 stdout=subprocess.PIPE)
+        written = run(['git', 'write-tree'],
+                      check=True, stdout=PIPE, cwd=self.workdir)
         oid = Oid.fromhex(written.stdout.rstrip().decode())
         return self.gettree(oid)
 
     def commit_staged(self, message: bytes = b'<git index>') -> 'Commit':
         return self.new_commit(self.index_tree(), [self.getcommit('HEAD')], message)
-
-    def git(self, args: Sequence[str], input: Optional[bytes] = None,
-            capture: bool = True, check: bool = True) -> bytes:
-        stdout = subprocess.PIPE if capture else None
-        rv = subprocess.run(['git', *args], input=input, check=check,
-                            stdout=stdout, cwd=self.workdir)
-        if capture:
-            return rv.stdout.rstrip()
-        return b''
 
     def getobj(self, ref: Union[Oid, str]) -> 'GitObj':
         print(type(ref), ref)
@@ -251,10 +241,13 @@ class GitObj:
             return
 
         self.persist_deps()
-        new_oid = subprocess.run(['git', 'hash-object', '--no-filters',
-                                  '-t', self.gittype(), '-w', '--stdin'],
-                                 input=self.body, check=True,
-                                 stdout=subprocess.PIPE).stdout.rstrip()
+        new_oid = run(['git', 'hash-object', '--no-filters',
+                       '-t', self.gittype(), '-w', '--stdin'],
+                      input=self.body,
+                      stdout=PIPE,
+                      cwd=self.repo.workdir,
+                      check=True).stdout.rstrip()
+
         assert Oid.fromhex(new_oid.decode('ascii')) == self.oid
         self.persisted = True
 
@@ -346,7 +339,7 @@ class Commit(GitObj):
         args = ['git', 'update-ref', '-m', reason, ref, str(self.oid)]
         if current is not None:
             args.append(str(current))
-        subprocess.run(args, check=True)
+        run(args, check=True, cwd=self.repo.workdir)
 
     def persist_deps(self):
         self.tree().persist()

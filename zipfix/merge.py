@@ -14,6 +14,7 @@ from .odb import Oid, GitObj, Tree, Blob, Commit, Entry, Mode
 from typing import Sequence, Optional, Type, Tuple, TypeVar
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from subprocess import run, PIPE, DEVNULL
 import subprocess
 
 
@@ -157,11 +158,11 @@ def merge_blobs(path: Path,
         other_lbl = f"{path} ({labels[2]})"
 
         # Try running git merge-file to automatically resolve conflicts.
-        process = subprocess.run([
-            'git', 'merge-file', '-q', '-p',
-            '-L', current_lbl, '-L', base_lbl, '-L', other_lbl,
-            tmpdir / 'current', tmpdir / 'base', tmpdir / 'other'
-        ], stdout=subprocess.PIPE)
+        process = run(['git', 'merge-file', '-q', '-p',
+                       '-L', current_lbl, '-L', base_lbl, '-L', other_lbl,
+                       tmpdir / 'current', tmpdir / 'base', tmpdir / 'other'],
+                      stdout=PIPE,
+                      cwd=current.repo.workdir)
 
         # The return code of git merge-file is '0' if there were no conflicts,
         # negative if there was an error, and the positive number of conficts
@@ -174,12 +175,13 @@ def merge_blobs(path: Path,
         # Our merge failed with conflicts. Instead try calling an interactive
         # merge handler. Display a prompt to confirm fixes have been made.
         # XXX(nika): Support multiple mergetools?
-        subprocess.run([
-            'kdiff3', '--merge', '--auto', '-o', tmpdir / 'merged',
-            # kdiff3 takes base as the first file.
-            '--L1', base_lbl, '--L2', current_lbl, '--L3', other_lbl,
-            tmpdir / 'base', tmpdir / 'current', tmpdir / 'other',
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run(['kdiff3', '--merge', '--auto', '-o', tmpdir / 'merged',
+             # kdiff3 takes base as the first file.
+             '--L1', base_lbl, '--L2', current_lbl, '--L3', other_lbl,
+             tmpdir / 'base', tmpdir / 'current', tmpdir / 'other'],
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+            cwd=current.repo.workdir)
 
         if input('Have conflicts resolved successfully? (y/N) ').lower() != 'y':
             raise MergeConflict("merging failed")
