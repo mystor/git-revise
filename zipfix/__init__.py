@@ -16,6 +16,9 @@ import sys
 from .odb import MissingObject, Oid, Signature, Repository, GitObj, Commit, Mode, Entry, Tree, Blob
 
 
+__version__ = '0.1'
+
+
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
     """Oldest-first iterator over the given commit range,
     not including the commit |base|"""
@@ -73,6 +76,7 @@ def parser() -> ArgumentParser:
     parser.add_argument('--ref', default='HEAD', help='reference to update')
     parser.add_argument('--reauthor', action='store_true',
                         help='reset the author of the targeted commit')
+    parser.add_argument('--version', action='version', version=__version__)
 
     index_group = parser.add_mutually_exclusive_group()
     index_group.add_argument('--no-index', action='store_true',

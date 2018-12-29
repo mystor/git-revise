@@ -1,7 +1,9 @@
 from setuptools import setup, find_packages
 
+import zipfix
+
 setup(name='zipfix',
-      version='0.1',
+      version=zipfix.__version__,
       packages=find_packages(),
       scripts=['git-zipfix'],
 
