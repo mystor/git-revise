@@ -2,36 +2,66 @@ import zipfix
 from zipfix import Commit
 
 
+def reword_helper(repo, flags, target, message):
+    old = repo.getcommit(target)
+    assert old.message != message.encode()
+    assert old.persisted
+
+    zipfix.main(flags + [target])
+
+    new = repo.getcommit(target)
+    assert old != new, "commit was modified"
+    assert old.tree() == new.tree(), "tree is unchanged"
+    assert old.parents() == new.parents(), "parents are unchanged"
+
+    assert new.message == message.encode(), "message set correctly"
+    assert new.persisted, "commit persisted to disk"
+    assert new.author == old.author, "author is unchanged"
+    assert new.committer == repo.default_committer, "committer is updated"
+
+
 def test_reword_head(repo):
     repo.load_template('basic')
+    reword_helper(
+        repo,
+        ['--no-index', '-m', 'reword_head test', '-m', 'another line'],
+        'HEAD',
+        'reword_head test\n\nanother line\n')
 
-    old_head = repo.getcommit('HEAD')
-    assert old_head.message != b'my new message\n'
-    assert old_head.persisted
 
-    zipfix.main(['--no-index', '-m', 'my new message', 'HEAD'])
-
-    head = repo.getcommit('HEAD')
-    assert head.message == b'my new message\n'
-    assert head.persisted
-    assert head.committer != repo.default_committer
+def test_reword_nonhead(repo):
+    repo.load_template('basic')
+    reword_helper(
+        repo,
+        ['--no-index', '-m', 'reword_nonhead test', '-m', 'another line'],
+        'HEAD~',
+        'reword_nonhead test\n\nanother line\n')
 
 
 def test_reword_head_editor(repo, fake_editor):
     repo.load_template('basic')
 
-    old_head = repo.getcommit('HEAD')
-    assert old_head.message != b'my new message\n'
-    assert old_head.persisted
+    old = repo.getcommit('HEAD')
+    with fake_editor(b'reword_head_editor test\n\nanother line\n') as f:
+        reword_helper(
+            repo,
+            ['--no-index', '-e'],
+            'HEAD',
+            'reword_head_editor test\n\nanother line\n')
+        assert f.read().startswith(old.message)
 
-    with fake_editor(b'my new message\n') as f:
-        zipfix.main(['--no-index', '-e', 'HEAD'])
-        assert f.read().startswith(old_head.message)
 
-    head = repo.getcommit('HEAD')
-    assert head.message == b'my new message\n'
-    assert head.persisted
-    assert head.committer != repo.default_committer
+def test_reword_nonhead_editor(repo, fake_editor):
+    repo.load_template('basic')
+
+    old = repo.getcommit('HEAD~')
+    with fake_editor(b'reword_nonhead_editor test\n\nanother line\n') as f:
+        reword_helper(
+            repo,
+            ['--no-index', '-e'],
+            'HEAD~',
+            'reword_nonhead_editor test\n\nanother line\n')
+        assert f.read().startswith(old.message)
 
 
 def test_reword_root(repo, bash):

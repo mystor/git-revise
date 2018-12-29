@@ -78,6 +78,14 @@ class Signature:
     def __repr__(self):
         return f"<Signature {self.name}, {self.email}, {self.timestamp}, {self.offset}>"
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Signature):
+            return False
+        return self.name == other.name and \
+            self.email == other.email and \
+            self.timestamp == other.timestamp and \
+            self.offset == other.offset
+
 
 class Repository:
     workdir: Path
@@ -236,7 +244,7 @@ class GitObj:
     def gittype(cls) -> str:
         return cls.__name__.lower()
 
-    def persist(self):
+    def persist(self) -> None:
         if self.persisted:
             return
 
@@ -341,7 +349,7 @@ class Commit(GitObj):
             args.append(str(current))
         run(args, check=True, cwd=self.repo.workdir)
 
-    def persist_deps(self):
+    def persist_deps(self) -> None:
         self.tree().persist()
         for parent in self.parents():
             parent.persist()
@@ -390,9 +398,9 @@ class Entry(object):
             return self.repo.gettree(self.oid)
         return Tree(self.repo, b'')
 
-    def persist(self):
+    def persist(self) -> None:
         if self.mode != Mode.GITLINK:
-            self.repo.get(self.oid).persist()
+            self.repo.getobj(self.oid).persist()
 
     def __repr__(self):
         return f"<Entry {self.mode}, {self.oid}>"
@@ -418,7 +426,7 @@ class Tree(GitObj):
             rest = rest[20:]
             self.entries[name] = Entry(self.repo, Mode(mode), entry_oid)
 
-    def persist_deps(self):
+    def persist_deps(self) -> None:
         for entry in self.entries.values():
             entry.persist()
 
