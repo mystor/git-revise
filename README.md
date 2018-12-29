@@ -1,4 +1,5 @@
 # git zipfix
+[![Build Status](https://travis-ci.org/mystor/git-zipfix.svg?branch=master)](https://travis-ci.org/mystor/git-zipfix)
 
 git-zipfix is a tool to make it easier and faster to perform modifications on
 historical commits within large repositories.
