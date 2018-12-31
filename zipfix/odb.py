@@ -160,7 +160,6 @@ class Repository:
         return self.new_commit(self.index_tree(), [self.getcommit('HEAD')], message)
 
     def getobj(self, ref: Union[Oid, str]) -> 'GitObj':
-        print(type(ref), ref)
         if isinstance(ref, Oid):
             if ref in self.objects:
                 return self.objects[ref]
