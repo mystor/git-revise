@@ -10,12 +10,13 @@ files and generate. This algorithm, on the other hand, avoids looking at
 unmodified trees and blobs when possible.
 """
 
-from .odb import Oid, GitObj, Tree, Blob, Commit, Entry, Mode
+from .odb import Repository, Oid, GitObj, Tree, Blob, Commit, Entry, Mode
 from typing import Sequence, Optional, Type, Tuple, TypeVar
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from subprocess import run, PIPE, DEVNULL
 import subprocess
+import textwrap
 
 
 T = TypeVar('T')
@@ -145,13 +146,10 @@ def merge_blobs(path: Path,
                 other: Blob) -> Blob:
     with TemporaryDirectory() as tmpdir_name:
         tmpdir = Path(tmpdir_name)
-        with open(tmpdir / 'current', 'wb') as f:
-            f.write(current.body)
-        with open(tmpdir / 'base', 'wb') as f:
-            if base is not None:
-                f.write(base.body)
-        with open(tmpdir / 'other', 'wb') as f:
-            f.write(other.body)
+
+        (tmpdir / 'current').write_bytes(current.body)
+        (tmpdir / 'base').write_bytes(base.body if base else b'')
+        (tmpdir / 'other').write_bytes(other.body)
 
         current_lbl = f"{path} ({labels[0]})"
         base_lbl = f"{path} ({labels[1]})"
@@ -172,19 +170,24 @@ def merge_blobs(path: Path,
         elif process.returncode < 0:
             raise MergeConflict("git merge-file errored")
 
-        # Our merge failed with conflicts. Instead try calling an interactive
-        # merge handler. Display a prompt to confirm fixes have been made.
-        # XXX(nika): Support multiple mergetools?
-        run(['kdiff3', '--merge', '--auto', '-o', tmpdir / 'merged',
-             # kdiff3 takes base as the first file.
-             '--L1', base_lbl, '--L2', current_lbl, '--L3', other_lbl,
-             tmpdir / 'base', tmpdir / 'current', tmpdir / 'other'],
-            stdout=DEVNULL,
-            stderr=DEVNULL,
-            cwd=current.repo.workdir)
+        # There was a merge conflict.
+        print(f"Merge conflict for '{path}'")
+        if input("  Edit conflicted file? (Y/n) ").lower() == 'n':
+            raise MergeConflict("user aborted")
 
-        if input('Have conflicts resolved successfully? (y/N) ').lower() != 'y':
-            raise MergeConflict("merging failed")
+        # Open the editor on the conflicted file.
+        conflicts = tmpdir / 'conflicts'
+        conflicts.write_bytes(process.stdout)
+        proc = subprocess.run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
 
-        with open(tmpdir / 'merged', 'rb') as f:
-            return Blob(current.repo, f.read())
+        # Print notes about the merge if errors were found
+        merged = conflicts.read_bytes()
+        if proc.returncode != 0:
+            print(f"(note) editor exited with status code {proc.returncode}")
+        if b'<<<<<<<' in merged or b'=======' in merged or b'>>>>>>>' in merged:
+            print("(note) conflict markers found in the merged file")
+
+        # Was the merge successful?
+        if input("  Merge successful? (y/N) ").lower() != 'y':
+            raise MergeConflict("user aborted")
+        return Blob(current.repo, merged)
