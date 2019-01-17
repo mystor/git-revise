@@ -103,15 +103,16 @@ def main(argv):
 
     if args.all:
         print("Staging all changes")
-        if subprocess.run([ "git", "add", "-u" ]).returncode != 0:
+        if subprocess.run(["git", "add", "-u"]).returncode != 0:
             print("Couldn't stage changes", file=sys.stderr)
             sys.exit(1)
 
     # If --no-index was not supplied, apply staged changes to the target.
     if not args.no_index:
-        print(f"Applying staged changes to '{args.target}'")
         final = repo.commit_staged(b"<git index>")
-        current = current.update(tree=final.rebase(current).tree())
+        if final.tree() != head.tree():
+            print(f"Applying staged changes to '{args.target}'")
+            current = current.update(tree=final.rebase(current).tree())
 
     # Update the commit message on the target commit if requested.
     if args.message:
@@ -131,10 +132,12 @@ def main(argv):
         current = current.update(author=repo.default_author)
 
     if current != replaced:
+        print(f"{str(current.oid)[:16]} {current.summary()}")
+
         # Rebase commits atop the commit range.
-        for idx, commit in enumerate(to_rebase):
-            print(f"Reparenting commit {idx + 1}/{len(to_rebase)}: {commit.oid}")
+        for commit in to_rebase:
             current = commit.rebase(current)
+            print(f"{str(current.oid)[:16]} {current.summary()}")
 
         # Update the HEAD commit to point to the new value.
         print(f"Updating {args.ref} ({head.oid} => {current.oid})")
@@ -150,3 +153,5 @@ def main(argv):
                   "(note) use `git status` to see what has changed.",
                   file=sys.stderr)
             sys.exit(1)
+    else:
+        print(f"(warning) no changes performed", file=sys.stderr)

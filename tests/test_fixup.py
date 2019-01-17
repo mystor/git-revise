@@ -1,6 +1,4 @@
-import zipfix
-from zipfix import Commit
-
+from io import StringIO
 import zipfix
 from zipfix import Commit
 
@@ -40,6 +38,7 @@ def test_fixup_head(repo, bash):
 def test_fixup_nonhead(repo, bash):
     repo.load_template('basic')
     fixup_helper(repo, bash, [], 'HEAD~')
+
 
 def test_fixup_head_msg(repo, bash):
     repo.load_template('basic')
@@ -87,3 +86,35 @@ def test_fixup_nonhead_editor(repo, bash, fake_editor):
             'HEAD~',
             'fixup_nonhead_editor test\n\nanother line\n')
         assert f.read().startswith(old.message)
+
+
+def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
+    import textwrap
+
+    repo.load_template('basic')
+    bash('echo "conflict" > file1')
+    bash('git add file1')
+
+    old = repo.getcommit('HEAD~')
+    assert old.persisted
+
+    with fake_editor(b'conflict\n') as fd:
+        monkeypatch.setattr('sys.stdin', StringIO('y\ny\ny\ny\n'))
+
+        zipfix.main(['HEAD~'])
+        old_file = fd.read().decode()
+
+        print(old_file)
+        assert old_file == textwrap.dedent('''\
+            <<<<<<< /file1 (new parent)
+            conflict
+            =======
+            Hello, World!
+            Oops, gotta add a new line!
+
+            >>>>>>> /file1 (incoming)
+            ''')
+
+        new = repo.getcommit('HEAD~')
+        assert new.persisted
+        assert new != old

@@ -57,6 +57,7 @@ def fake_editor(tmp_path_factory, monkeypatch):
     def fake_editor(text):
         tmpdir = tmp_path_factory.mktemp('editor')
         out = tmpdir / 'out'
+        flag = tmpdir / 'flag'
 
         # Build the script to be run as "editor"
         script = tmpdir / 'fake_editor'
@@ -73,11 +74,16 @@ def fake_editor(tmp_path_factory, monkeypatch):
                     f.seek(0)
                     f.truncate()
                     f.write({repr(text)})
+
+                    # Create a file with the given name
+                    open({repr(str(flag))}, 'wb').close()
                 '''))
         script.chmod(0o755)
 
         with monkeypatch.context() as cx, open(out, 'wb+') as outf:
             cx.setenv('EDITOR', str(script))
+            assert not flag.exists(), "Editor shouldn't have been run yet"
             yield outf
+            assert flag.exists(), "Editor should have been run"
 
     return fake_editor

@@ -312,6 +312,9 @@ class Commit(GitObj):
                 f"Commit {self.oid} has {len(self.parents())} parents")
         return self.parents()[0]
 
+    def summary(self) -> str:
+        return self.message.split(b'\n', maxsplit=1)[0].decode(errors='replace')
+
     def rebase(self, parent: 'Commit') -> 'Commit':
         from .merge import rebase
         return rebase(self, parent)
