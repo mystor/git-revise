@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from .odb import Commit, Repository
+from .utils import run_editor
 import re
 
 class StepKind(Enum):
@@ -32,7 +33,7 @@ class StepKind(Enum):
             return StepKind.REWORD
         if 'index'.startswith(s):
             return StepKind.INDEX
-        raise ValueError()
+        raise ValueError(f"step kind '{s}' must be one of: pick, fixup, reword, or index")
 
 
 class Step:
@@ -51,12 +52,21 @@ class Step:
     def parse(repo: Repository, s: str) -> Step:
         parsed = re.match('(?P<command>\S+)\s(?P<hash>\S+)', s)
         if not parsed:
-            raise ValueError()
+            raise ValueError(f"todo entry '{s}' must follow format <keyword> <sha> <optional message>")
         kind = StepKind.parse(parsed.group('command'))
         commit = repo.getcommit(parsed.group('hash'))
         return Step(kind, commit)
 
-def thingy(list: List[Commit], include_index: bool) -> List[Step]:
-    # Prompt the user
-    # Produce list of steps?
-    pass
+def thingy(repo: Repository, list: List[Commit], index: Optional[Commit]) -> List[Step]:
+    s = ""
+    for commit in list:
+        s += f"{Step(StepKind.PICK, commit)}\n"
+
+    response = run_editor("git-zipfix-todo", s.encode())
+    result = []
+    for line in response.splitlines():
+        if line.isspace():
+            continue
+        result.append(Step.parse(repo, line.decode(errors='replace').strip()))
+
+    return result
