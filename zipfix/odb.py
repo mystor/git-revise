@@ -29,6 +29,9 @@ class Oid(bytes):
     def null(cls) -> 'Oid':
         return cls(b'\0' * 20)
 
+    def short(self) -> str:
+        return str(self)[:12]
+
     @classmethod
     def for_object(cls, tag: str, body: bytes):
         m = hashlib.sha1()
