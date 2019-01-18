@@ -5,7 +5,7 @@ in-memory merges and rebases.
 """
 
 from typing import Tuple, List, Optional
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 import subprocess
 import textwrap
@@ -47,6 +47,8 @@ def parser() -> ArgumentParser:
                              help='stage all tracked files before running')
 
     msg_group = parser.add_mutually_exclusive_group()
+    msg_group.add_argument('--interactive', '-i', action='store_true',
+                           help='interactively edit commit stack')
     msg_group.add_argument('--edit', '-e', action='store_true',
                            help='edit commit message of targeted commit')
     msg_group.add_argument('--message', '-m', action='append',
@@ -54,27 +56,22 @@ def parser() -> ArgumentParser:
     return parser
 
 
-def main(argv):
-    args = parser().parse_args(argv)
+def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
+    pass
 
-    repo = Repository()
 
-    final = head = repo.getcommit(args.ref)
+def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
+    head = repo.getcommit(args.ref)
     current = replaced = repo.getcommit(args.target)
     to_rebase = commit_range(current, head)
 
-    if args.all:
-        print("Staging all changes")
-        if subprocess.run(["git", "add", "-u"]).returncode != 0:
-            print("Couldn't stage changes", file=sys.stderr)
-            sys.exit(1)
+    # Apply changes to the target commit.
+    final = head.tree()
+    if staged:
+        final = staged.rebase(head).tree()
 
-    # If --no-index was not supplied, apply staged changes to the target.
-    if not args.no_index:
-        final = repo.commit_staged(b"<git index>")
-        if final.tree() != head.tree():
-            print(f"Applying staged changes to '{args.target}'")
-            current = current.update(tree=final.rebase(current).tree())
+        print(f"Applying staged changes to '{args.target}'")
+        current = current.update(tree=staged.rebase(current).tree())
 
     # Update the commit message on the target commit if requested.
     if args.message:
@@ -107,9 +104,9 @@ def main(argv):
 
         # We expect our tree to match the tree we started with (including index
         # changes). If it does not, print out a warning.
-        if current.tree() != final.tree():
+        if current.tree() != final:
             print("(warning) unexpected final tree\n"
-                  f"(note) expected: {final.tree().oid}\n"
+                  f"(note) expected: {final.oid}\n"
                   f"(note) actual: {current.tree().oid}\n"
                   "(note) working directory & index have not been updated.\n"
                   "(note) use `git status` to see what has changed.",
@@ -117,3 +114,32 @@ def main(argv):
             sys.exit(1)
     else:
         print(f"(warning) no changes performed", file=sys.stderr)
+
+
+def main(argv):
+    args = parser().parse_args(argv)
+    repo = Repository()
+
+    # If '-a' was specified, stage all changes.
+    if args.all:
+        print("Staging all changes")
+        if subprocess.run(["git", "add", "-u"]).returncode != 0:
+            print("Couldn't stage changes", file=sys.stderr)
+            sys.exit(1)
+
+    # Create a commit with changes from the index
+    head = repo.getcommit('HEAD')
+    staged = None
+    if not args.no_index:
+        staged = repo.commit_staged(b"<git index>")
+
+        # Check if there were no staged changes to consider, and don't bother
+        # creating the 'staged' commit.
+        if staged.tree() == head.tree():
+            staged = None
+
+    if args.interactive:
+        interactive(args, repo, staged)
+    else:
+        noninteractive(args, repo, staged)
+
