@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import List
+from .odb import Commit
 
 class StepKind(Enum):
     PICK = 1
@@ -20,12 +22,15 @@ class StepKind(Enum):
 
 class Step:
     # pick SHA1... Commit Message Text FOr Helpy Stuff
-    thing: Thing
+    kind: StepKind
     commit: Commit
 
+    def __str__(self):
+        return f"{self.kind} {self.commit.tree_oid.short()} {self.commit.summary()}"
 
 
-def thingy(List[Commit], include_index: bool) -> list[Step]:
+
+def thingy(list: List[Commit], include_index: bool) -> List[Step]:
     # Prompt the user
     # Produce list of steps?
-    ...
+    pass
