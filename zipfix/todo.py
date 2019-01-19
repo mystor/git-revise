@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Set, Optional
-from .odb import Commit, Repository
+from .odb import Commit, Oid, Repository
 from .utils import run_editor
 import re
 
@@ -85,7 +85,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
 
     # Parse the response back into a list of steps
     result = []
-    seen: Set[Commit] = set()
+    seen: Set[Oid] = set()
     seen_index = False
     for line in response.splitlines():
         if line.isspace():
@@ -94,9 +94,9 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
         result.append(step)
 
         # Produce diagnostics for duplicated commits.
-        if step.commit in seen:
+        if step.commit.oid in seen:
             print(f"(warning) Commit {step.commit} referenced multiple times")
-        seen.add(step.commit)
+        seen.add(step.commit.oid)
 
         if step.kind == StepKind.INDEX:
             seen_index = True
@@ -104,11 +104,11 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
             raise ValueError("Non-index todo found after index todo")
 
     # Produce diagnostics for missing and/or added commits.
-    before = set(s.commit for s in todos)
-    after = set(s.commit for s in result)
-    for commit in (before - after):
-        print(f"(warning) commit {commit} missing from todo list")
-    for commit in (after - before):
-        print(f"(warning) commit {commit} not in original todo list")
+    before = set(s.commit.oid for s in todos)
+    after = set(s.commit.oid for s in result)
+    for oid in (before - after):
+        print(f"(warning) commit {oid} missing from todo list")
+    for oid in (after - before):
+        print(f"(warning) commit {oid} not in original todo list")
 
     return result
