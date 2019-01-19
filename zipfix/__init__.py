@@ -45,8 +45,8 @@ def parser() -> ArgumentParser:
 
 
 def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    head = repo.getcommit(args.ref)
-    target = repo.getcommit(args.target)
+    head = repo.get_commit(args.ref)
+    target = repo.get_commit(args.target)
     to_rebase = commit_range(target, head)
 
     # Build up an initial todos list, edit that todos list.
@@ -64,8 +64,8 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
 
 def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    head = repo.getcommit(args.ref)
-    current = replaced = repo.getcommit(args.target)
+    head = repo.get_commit(args.ref)
+    current = replaced = repo.get_commit(args.target)
     to_rebase = commit_range(current, head)
 
     # Apply changes to the target commit.

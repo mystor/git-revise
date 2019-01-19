@@ -4,7 +4,7 @@ from zipfix import Commit
 
 
 def fixup_helper(repo, bash, flags, target, message=None):
-    old = repo.getcommit(target)
+    old = repo.get_commit(target)
     assert old.persisted
 
     bash('''
@@ -14,7 +14,7 @@ def fixup_helper(repo, bash, flags, target, message=None):
 
     zipfix.main(flags + [target])
 
-    new = repo.getcommit(target)
+    new = repo.get_commit(target)
     assert old != new, "commit was modified"
     assert old.parents() == new.parents(), "parents are unchanged"
 
@@ -63,7 +63,7 @@ def test_fixup_nonhead_msg(repo, bash):
 def test_fixup_head_editor(repo, bash, fake_editor):
     repo.load_template('basic')
 
-    old = repo.getcommit('HEAD')
+    old = repo.get_commit('HEAD')
     with fake_editor(b'fixup_head_editor test\n\nanother line\n') as f:
         fixup_helper(
             repo,
@@ -77,7 +77,7 @@ def test_fixup_head_editor(repo, bash, fake_editor):
 def test_fixup_nonhead_editor(repo, bash, fake_editor):
     repo.load_template('basic')
 
-    old = repo.getcommit('HEAD~')
+    old = repo.get_commit('HEAD~')
     with fake_editor(b'fixup_nonhead_editor test\n\nanother line\n') as f:
         fixup_helper(
             repo,
@@ -95,7 +95,7 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
     bash('echo "conflict" > file1')
     bash('git add file1')
 
-    old = repo.getcommit('HEAD~')
+    old = repo.get_commit('HEAD~')
     assert old.persisted
 
     with fake_editor(b'conflict\n') as fd:
@@ -115,6 +115,6 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
             >>>>>>> /file1 (incoming)
             ''')
 
-        new = repo.getcommit('HEAD~')
+        new = repo.get_commit('HEAD~')
         assert new.persisted
         assert new != old
