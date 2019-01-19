@@ -59,14 +59,32 @@ class Step:
 
 def thingy(repo: Repository, list: List[Commit], index: Optional[Commit]) -> List[Step]:
     s = ""
+    seen = set()
     for commit in list:
         s += f"{Step(StepKind.PICK, commit)}\n"
+        seen.add(commit.tree_oid)
+
+    if index:
+        s += f"{Step(StepKind.INDEX, index)}\n"
+        seen.add(commit.tree_oid)
 
     response = run_editor("git-zipfix-todo", s.encode())
     result = []
+    seen_index = False
     for line in response.splitlines():
         if line.isspace():
             continue
-        result.append(Step.parse(repo, line.decode(errors='replace').strip()))
+        step = Step.parse(repo, line.decode(errors='replace').strip())
+        result.append(step)
+        id = step.commit.tree_oid
+        if id in seen:
+            raise ValueError(f"Commit {id} not from original list or mentioned multiple times")
+        if step.kind == StepKind.INDEX:
+            seen_index = True
+        elif seen_index:
+            raise ValueError("index entries may only be at the end of the list")
+        seen.remove(id)
 
+    for val in seen:
+        raise ValueError(f"Commit {val} must mentioned in edited list")
     return result
