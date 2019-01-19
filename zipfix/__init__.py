@@ -11,25 +11,11 @@ import subprocess
 import textwrap
 import sys
 
-# Re-export primitives from the odb module to expose them at the root.
-from .odb import MissingObject, Oid, Signature, Repository, GitObj, Commit, Mode, Entry, Tree, Blob
-
-from .utils import run_editor, edit_commit_message, update_head
-
-from .todo import thingy, StepKind
+from .odb import Repository, Commit
+from .utils import commit_range, run_editor, edit_commit_message, update_head
+from .todo import edit_todos, StepKind
 
 __version__ = '0.1'
-
-
-def commit_range(base: Commit, tip: Commit) -> List[Commit]:
-    """Oldest-first iterator over the given commit range,
-    not including the commit |base|"""
-    commits = []
-    while tip != base:
-        commits.append(tip)
-        tip = tip.parent()
-    commits.reverse()
-    return commits
 
 
 def parser() -> ArgumentParser:
@@ -63,7 +49,7 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     current = repo.getcommit(args.target)
     to_rebase = commit_range(current, head)
 
-    steps = thingy(repo, to_rebase, staged)
+    steps = edit_todos(repo, to_rebase, staged)
     for step in steps:
         rebased = step.commit.rebase(current)
         if step.kind == StepKind.PICK:
@@ -76,6 +62,9 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
             break
         else:
             raise ValueError(f"Unknown StepKind value: {step.kind}")
+
+        if args.reauthor:
+            current = current.update(author=repo.default_author)
 
         print(f"{current.oid.short()} {current.summary()}")
 
@@ -90,10 +79,9 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     # Apply changes to the target commit.
     final = head.tree()
     if staged:
-        final = staged.rebase(head).tree()
-
         print(f"Applying staged changes to '{args.target}'")
         current = current.update(tree=staged.rebase(current).tree())
+        final = staged.rebase(head).tree()
 
     # Update the commit message on the target commit if requested.
     if args.message:

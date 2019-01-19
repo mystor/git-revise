@@ -42,7 +42,7 @@ class Step:
     commit: Commit
 
     def __str__(self):
-        return f"{self.kind} {self.commit.tree_oid.short()} {self.commit.summary()}"
+        return f"{self.kind} {self.commit.oid.short()} {self.commit.summary()}"
 
     def __init__(self, kind: StepKind, commit: Commit):
         self.kind = kind
@@ -57,16 +57,24 @@ class Step:
         commit = repo.getcommit(parsed.group('hash'))
         return Step(kind, commit)
 
-def thingy(repo: Repository, list: List[Commit], index: Optional[Commit]) -> List[Step]:
+
+def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
+    steps = [Step(StepKind.PICK, commit) for commit in commits]
+    if index:
+        steps.append(Step(StepKind.INDEX, index))
+    return steps
+
+
+def edit_todos(repo: Repository, list: List[Commit], index: Optional[Commit]) -> List[Step]:
     s = ""
     seen = set()
     for commit in list:
         s += f"{Step(StepKind.PICK, commit)}\n"
-        seen.add(commit.tree_oid)
+        seen.add(commit.oid)
 
     if index:
         s += f"{Step(StepKind.INDEX, index)}\n"
-        seen.add(commit.tree_oid)
+        seen.add(commit.oid)
 
     response = run_editor("git-zipfix-todo", s.encode())
     result = []
@@ -76,14 +84,14 @@ def thingy(repo: Repository, list: List[Commit], index: Optional[Commit]) -> Lis
             continue
         step = Step.parse(repo, line.decode(errors='replace').strip())
         result.append(step)
-        id = step.commit.tree_oid
-        if id in seen:
-            raise ValueError(f"Commit {id} not from original list or mentioned multiple times")
+        oid = step.commit.oid
+        if oid in seen:
+            raise ValueError(f"Commit {oid} not from original list or mentioned multiple times")
         if step.kind == StepKind.INDEX:
             seen_index = True
         elif seen_index:
             raise ValueError("index entries may only be at the end of the list")
-        seen.remove(id)
+        seen.remove(oid)
 
     for val in seen:
         raise ValueError(f"Commit {val} must mentioned in edited list")

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from pathlib import Path
 import tempfile
@@ -8,6 +8,18 @@ import textwrap
 import sys
 
 from .odb import Commit, Tree
+
+
+def commit_range(base: Commit, tip: Commit) -> List[Commit]:
+    """Oldest-first iterator over the given commit range,
+    not including the commit |base|"""
+    commits = []
+    while tip != base:
+        commits.append(tip)
+        tip = tip.parent()
+    commits.reverse()
+    return commits
+
 
 def run_editor(filename: str, text: bytes,
                comments: Optional[str] = None,
