@@ -3,13 +3,13 @@ from zipfix import Commit
 
 
 def reword_helper(repo, flags, target, message):
-    old = repo.getcommit(target)
+    old = repo.get_commit(target)
     assert old.message != message.encode()
     assert old.persisted
 
     zipfix.main(flags + [target])
 
-    new = repo.getcommit(target)
+    new = repo.get_commit(target)
     assert old != new, "commit was modified"
     assert old.tree() == new.tree(), "tree is unchanged"
     assert old.parents() == new.parents(), "parents are unchanged"
@@ -41,7 +41,7 @@ def test_reword_nonhead(repo):
 def test_reword_head_editor(repo, fake_editor):
     repo.load_template('basic')
 
-    old = repo.getcommit('HEAD')
+    old = repo.get_commit('HEAD')
     with fake_editor(b'reword_head_editor test\n\nanother line\n') as f:
         reword_helper(
             repo,
@@ -54,7 +54,7 @@ def test_reword_head_editor(repo, fake_editor):
 def test_reword_nonhead_editor(repo, fake_editor):
     repo.load_template('basic')
 
-    old = repo.getcommit('HEAD~')
+    old = repo.get_commit('HEAD~')
     with fake_editor(b'reword_nonhead_editor test\n\nanother line\n') as f:
         reword_helper(
             repo,
@@ -75,12 +75,12 @@ def test_reword_root(repo, bash):
         git commit -m "another commit"
         ''')
 
-    old = repo.getcommit('HEAD~')
+    old = repo.get_commit('HEAD~')
     assert old.parents() == []
     assert old.message == b'initial commit\n'
 
     zipfix.main(['-m', 'my new message', 'HEAD~'])
 
-    new = repo.getcommit('HEAD~')
+    new = repo.get_commit('HEAD~')
     assert new.parents() == []
     assert new.message == b'my new message\n'

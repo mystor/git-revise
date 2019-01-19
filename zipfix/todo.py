@@ -40,7 +40,7 @@ class Step:
         if not parsed:
             raise ValueError(f"todo entry '{s}' must follow format <keyword> <sha> <optional message>")
         kind = StepKind.parse(parsed.group('command'))
-        commit = repo.getcommit(parsed.group('hash'))
+        commit = repo.get_commit(parsed.group('hash'))
         return Step(kind, commit)
 
     def __str__(self):

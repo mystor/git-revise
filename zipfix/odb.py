@@ -158,12 +158,12 @@ class Repository:
         written = run(['git', 'write-tree'],
                       check=True, stdout=PIPE, cwd=self.workdir)
         oid = Oid.fromhex(written.stdout.rstrip().decode())
-        return self.gettree(oid)
+        return self.get_tree(oid)
 
     def commit_staged(self, message: bytes = b'<git index>') -> 'Commit':
-        return self.new_commit(self.index_tree(), [self.getcommit('HEAD')], message)
+        return self.new_commit(self.index_tree(), [self.get_commit('HEAD')], message)
 
-    def getobj(self, ref: Union[Oid, str]) -> 'GitObj':
+    def get_obj(self, ref: Union[Oid, str]) -> 'GitObj':
         if isinstance(ref, Oid):
             cache = self.objects[ref[0]]
             if ref in cache:
@@ -210,20 +210,20 @@ class Repository:
         assert obj.oid == oid, "miscomputed oid"
         return obj
 
-    def getcommit(self, ref: Union[Oid, str]) -> 'Commit':
-        obj = self.getobj(ref)
+    def get_commit(self, ref: Union[Oid, str]) -> 'Commit':
+        obj = self.get_obj(ref)
         if isinstance(obj, Commit):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Commit!")
 
-    def gettree(self, ref: Union[Oid, str]) -> 'Tree':
-        obj = self.getobj(ref)
+    def get_tree(self, ref: Union[Oid, str]) -> 'Tree':
+        obj = self.get_obj(ref)
         if isinstance(obj, Tree):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Tree!")
 
-    def getblob(self, ref: Union[Oid, str]) -> 'Blob':
-        obj = self.getobj(ref)
+    def get_blob(self, ref: Union[Oid, str]) -> 'Blob':
+        obj = self.get_obj(ref)
         if isinstance(obj, Blob):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Blob!")
@@ -241,7 +241,7 @@ class GitObj:
     __slots__ = ('repo', 'body', 'oid', 'persisted')
 
     def __new__(cls, repo: Repository, body: bytes):
-        oid = Oid.for_object(cls.gittype(), body)
+        oid = Oid.for_object(cls.git_type(), body)
         cache = repo.objects[oid[0]]
         if oid in cache:
             return cache[oid]
@@ -256,7 +256,7 @@ class GitObj:
         return self
 
     @classmethod
-    def gittype(cls) -> str:
+    def git_type(cls) -> str:
         return cls.__name__.lower()
 
     def persist(self) -> None:
@@ -265,7 +265,7 @@ class GitObj:
 
         self.persist_deps()
         new_oid = run(['git', 'hash-object', '--no-filters',
-                       '-t', self.gittype(), '-w', '--stdin'],
+                       '-t', self.git_type(), '-w', '--stdin'],
                       input=self.body,
                       stdout=PIPE,
                       cwd=self.repo.workdir,
@@ -317,10 +317,10 @@ class Commit(GitObj):
                 raise ValueError('Unknown commit header: ' + key.decode())
 
     def tree(self) -> 'Tree':
-        return self.repo.gettree(self.tree_oid)
+        return self.repo.get_tree(self.tree_oid)
 
     def parents(self) -> Sequence['Commit']:
-        return [self.repo.getcommit(parent) for parent in self.parent_oids]
+        return [self.repo.get_commit(parent) for parent in self.parent_oids]
 
     def parent(self) -> 'Commit':
         if len(self.parents()) != 1:
@@ -403,22 +403,22 @@ class Entry(object):
 
     def blob(self) -> 'Blob':
         if self.mode in (Mode.REGULAR, Mode.EXEC):
-            return self.repo.getblob(self.oid)
+            return self.repo.get_blob(self.oid)
         return Blob(self.repo, b'')
 
     def symlink(self) -> bytes:
         if self.mode == Mode.SYMLINK:
-            return self.repo.getblob(self.oid).body
+            return self.repo.get_blob(self.oid).body
         return b'<non-symlink>'
 
     def tree(self) -> 'Tree':
         if self.mode == Mode.DIR:
-            return self.repo.gettree(self.oid)
+            return self.repo.get_tree(self.oid)
         return Tree(self.repo, b'')
 
     def persist(self) -> None:
         if self.mode != Mode.GITLINK:
-            self.repo.getobj(self.oid).persist()
+            self.repo.get_obj(self.oid).persist()
 
     def __repr__(self):
         return f"<Entry {self.mode}, {self.oid}>"
