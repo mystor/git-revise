@@ -8,6 +8,7 @@ from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tupl
 from pathlib import Path
 from enum import Enum
 from subprocess import Popen, run, PIPE
+from collections import defaultdict
 
 
 class MissingObject(Exception):
@@ -94,7 +95,7 @@ class Repository:
     workdir: Path
     default_author: 'Signature'
     default_committer: 'Signature'
-    objects: Dict[Oid, 'GitObj']
+    objects: Dict[int, Dict[Oid, 'GitObj']]
     catfile: Popen
 
     def __init__(self, workdir: Optional[Path] = None):
@@ -114,7 +115,7 @@ class Repository:
         self.catfile = Popen(['git', 'cat-file', '--batch'],
                              bufsize=-1, stdin=PIPE, stdout=PIPE,
                              cwd=self.workdir)
-        self.objects = {}
+        self.objects = defaultdict(dict)
 
     def new_commit(self,
                    tree: 'Tree',
@@ -164,8 +165,9 @@ class Repository:
 
     def getobj(self, ref: Union[Oid, str]) -> 'GitObj':
         if isinstance(ref, Oid):
-            if ref in self.objects:
-                return self.objects[ref]
+            cache = self.objects[ref[0]]
+            if ref in cache:
+                return cache[ref]
             ref = ref.hex()
 
         # Write out an object descriptor.
@@ -176,6 +178,17 @@ class Repository:
         resp = self.catfile.stdout.readline().decode('ascii').split()
         if len(resp) < 3:
             assert resp[1] == 'missing'
+
+            # If we have an abbreviated hash, check for in-memory commits.
+            try:
+                abbrev = bytes.fromhex(ref)
+                for oid, obj in self.objects[abbrev[0]].items():
+                    if oid.startswith(abbrev):
+                        return obj
+            except (ValueError, IndexError):
+                pass
+
+            # Not an abbreviated hash, the entry is missing.
             raise MissingObject(ref)
 
         oid, kind, size = Oid.fromhex(resp[0]), resp[1], int(resp[2])
@@ -184,7 +197,6 @@ class Repository:
 
         # Create a corresponding git object. This will re-use the item in the
         # cache, if found, and add the item to the cache otherwise.
-        obj: GitObj
         if kind == 'commit':
             obj = Commit(self, body)
         elif kind == 'tree':
@@ -230,15 +242,16 @@ class GitObj:
 
     def __new__(cls, repo: Repository, body: bytes):
         oid = Oid.for_object(cls.gittype(), body)
-        if oid in repo.objects:
-            return repo.objects[oid]
+        cache = repo.objects[oid[0]]
+        if oid in cache:
+            return cache[oid]
 
         self = super().__new__(cls)
         self.repo = repo
         self.body = body
         self.oid = oid
         self.persisted = False
-        repo.objects[oid] = self
+        cache[oid] = self
         self.parse_body()
         return self
 
