@@ -21,66 +21,71 @@ def reword_helper(repo, flags, target, message):
 
 
 def test_reword_head(repo):
-    repo.load_template('basic')
+    repo.load_template("basic")
     reword_helper(
         repo,
-        ['--no-index', '-m', 'reword_head test', '-m', 'another line'],
-        'HEAD',
-        'reword_head test\n\nanother line\n')
+        ["--no-index", "-m", "reword_head test", "-m", "another line"],
+        "HEAD",
+        "reword_head test\n\nanother line\n",
+    )
 
 
 def test_reword_nonhead(repo):
-    repo.load_template('basic')
+    repo.load_template("basic")
     reword_helper(
         repo,
-        ['--no-index', '-m', 'reword_nonhead test', '-m', 'another line'],
-        'HEAD~',
-        'reword_nonhead test\n\nanother line\n')
+        ["--no-index", "-m", "reword_nonhead test", "-m", "another line"],
+        "HEAD~",
+        "reword_nonhead test\n\nanother line\n",
+    )
 
 
 def test_reword_head_editor(repo, fake_editor):
-    repo.load_template('basic')
+    repo.load_template("basic")
 
-    old = repo.get_commit('HEAD')
-    with fake_editor(b'reword_head_editor test\n\nanother line\n') as f:
+    old = repo.get_commit("HEAD")
+    with fake_editor(b"reword_head_editor test\n\nanother line\n") as f:
         reword_helper(
             repo,
-            ['--no-index', '-e'],
-            'HEAD',
-            'reword_head_editor test\n\nanother line\n')
+            ["--no-index", "-e"],
+            "HEAD",
+            "reword_head_editor test\n\nanother line\n",
+        )
         assert f.read().startswith(old.message)
 
 
 def test_reword_nonhead_editor(repo, fake_editor):
-    repo.load_template('basic')
+    repo.load_template("basic")
 
-    old = repo.get_commit('HEAD~')
-    with fake_editor(b'reword_nonhead_editor test\n\nanother line\n') as f:
+    old = repo.get_commit("HEAD~")
+    with fake_editor(b"reword_nonhead_editor test\n\nanother line\n") as f:
         reword_helper(
             repo,
-            ['--no-index', '-e'],
-            'HEAD~',
-            'reword_nonhead_editor test\n\nanother line\n')
+            ["--no-index", "-e"],
+            "HEAD~",
+            "reword_nonhead_editor test\n\nanother line\n",
+        )
         assert f.read().startswith(old.message)
 
 
 def test_reword_root(repo, bash):
     bash(
-        '''
+        """
         echo "hello, world" > file1
         git add file1
         git commit -m "initial commit"
         echo "new line!" >> file1
         git add file1
         git commit -m "another commit"
-        ''')
+        """
+    )
 
-    old = repo.get_commit('HEAD~')
+    old = repo.get_commit("HEAD~")
     assert old.parents() == []
-    assert old.message == b'initial commit\n'
+    assert old.message == b"initial commit\n"
 
-    zipfix.main(['-m', 'my new message', 'HEAD~'])
+    zipfix.main(["-m", "my new message", "HEAD~"])
 
-    new = repo.get_commit('HEAD~')
+    new = repo.get_commit("HEAD~")
     assert new.parents() == []
-    assert new.message == b'my new message\n'
+    assert new.message == b"my new message\n"

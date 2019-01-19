@@ -4,26 +4,29 @@ from .odb import Commit, Oid, Repository
 from .utils import run_editor, edit_commit_message
 import re
 
+
 class StepKind(Enum):
-    PICK = 'pick'
-    FIXUP = 'fixup'
-    REWORD = 'reword'
-    INDEX = 'index'
+    PICK = "pick"
+    FIXUP = "fixup"
+    REWORD = "reword"
+    INDEX = "index"
 
     def __str__(self) -> str:
         return self.value
 
     @staticmethod
-    def parse(s: str) -> 'StepKind':
-        if 'pick'.startswith(s):
+    def parse(s: str) -> "StepKind":
+        if "pick".startswith(s):
             return StepKind.PICK
-        if 'fixup'.startswith(s):
+        if "fixup".startswith(s):
             return StepKind.FIXUP
-        if 'reword'.startswith(s):
+        if "reword".startswith(s):
             return StepKind.REWORD
-        if 'index'.startswith(s):
+        if "index".startswith(s):
             return StepKind.INDEX
-        raise ValueError(f"step kind '{s}' must be one of: pick, fixup, reword, or index")
+        raise ValueError(
+            f"step kind '{s}' must be one of: pick, fixup, reword, or index"
+        )
 
 
 class Step:
@@ -35,12 +38,14 @@ class Step:
         self.commit = commit
 
     @staticmethod
-    def parse(repo: Repository, s: str) -> 'Step':
-        parsed = re.match(r'(?P<command>\S+)\s(?P<hash>\S+)', s)
+    def parse(repo: Repository, s: str) -> "Step":
+        parsed = re.match(r"(?P<command>\S+)\s(?P<hash>\S+)", s)
         if not parsed:
-            raise ValueError(f"todo entry '{s}' must follow format <keyword> <sha> <optional message>")
-        kind = StepKind.parse(parsed.group('command'))
-        commit = repo.get_commit(parsed.group('hash'))
+            raise ValueError(
+                f"todo entry '{s}' must follow format <keyword> <sha> <optional message>"
+            )
+        kind = StepKind.parse(parsed.group("command"))
+        commit = repo.get_commit(parsed.group("hash"))
         return Step(kind, commit)
 
     def __str__(self):
@@ -61,8 +66,11 @@ def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
 
 def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     # Invoke the editors to parse commit messages.
-    todos_text = '\n'.join(str(step) for step in todos).encode()
-    response = run_editor("git-zipfix-todo", todos_text, comments=f"""\
+    todos_text = "\n".join(str(step) for step in todos).encode()
+    response = run_editor(
+        "git-zipfix-todo",
+        todos_text,
+        comments=f"""\
         Interactive Zipfix Todos ({len(todos)} commands)
 
         Commands:
@@ -76,7 +84,8 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
         If a line is removed, it will be treated like an 'index' line.
 
         However, if you remove everything, these changes will be aborted.
-        """)
+        """,
+    )
 
     # Parse the response back into a list of steps
     result = []
@@ -85,7 +94,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     for line in response.splitlines():
         if line.isspace():
             continue
-        step = Step.parse(repo, line.decode(errors='replace').strip())
+        step = Step.parse(repo, line.decode(errors="replace").strip())
         result.append(step)
 
         # Produce diagnostics for duplicated commits.
@@ -101,15 +110,17 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     # Produce diagnostics for missing and/or added commits.
     before = set(s.commit.oid for s in todos)
     after = set(s.commit.oid for s in result)
-    for oid in (before - after):
+    for oid in before - after:
         print(f"(warning) commit {oid} missing from todo list")
-    for oid in (after - before):
+    for oid in after - before:
         print(f"(warning) commit {oid} not in original todo list")
 
     return result
 
 
-def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> Commit:
+def apply_todos(
+    current: Commit, todos: List[Step], reauthor: bool = False
+) -> Commit:
     for step in todos:
         rebased = step.commit.rebase(current)
         if step.kind == StepKind.PICK:
