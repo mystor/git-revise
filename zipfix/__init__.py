@@ -13,7 +13,7 @@ import sys
 
 from .odb import Repository, Commit
 from .utils import commit_range, run_editor, edit_commit_message, update_head
-from .todo import build_todos, edit_todos, StepKind
+from .todo import apply_todos, build_todos, edit_todos, StepKind
 
 __version__ = '0.1'
 
@@ -49,28 +49,14 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     current = repo.getcommit(args.target)
     to_rebase = commit_range(current, head)
 
+    # Build up an initial todos list, edit that todos list, and then apply the
+    # changes.
     todos = build_todos(to_rebase, staged)
-    steps = edit_todos(repo, todos)
+    todos = edit_todos(repo, todos)
+    new_head = apply_todos(current, todos, reauthor=args.reauthor)
 
-    for step in steps:
-        rebased = step.commit.rebase(current)
-        if step.kind == StepKind.PICK:
-            current = rebased
-        elif step.kind == StepKind.FIXUP:
-            current = current.update(tree=rebased.tree())
-        elif step.kind == StepKind.REWORD:
-            current = edit_commit_message(current)
-        elif step.kind == StepKind.INDEX:
-            break
-        else:
-            raise ValueError(f"Unknown StepKind value: {step.kind}")
-
-        if args.reauthor:
-            current = current.update(author=repo.default_author)
-
-        print(f"{current.oid.short()} {current.summary()}")
-
-    update_head(args.ref, head, current, None)
+    # Update the value of HEAD to the new state.
+    update_head(args.ref, head, new_head, None)
 
 
 def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
