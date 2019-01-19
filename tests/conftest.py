@@ -15,9 +15,7 @@ RESOURCES = Path(__file__).parent / "resources"
 @pytest.fixture(scope="session")
 def bash():
     def run_bash(command, check=True, cwd=None):
-        subprocess.run(
-            ["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd
-        )
+        subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd)
 
     return run_bash
 

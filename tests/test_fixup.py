@@ -70,11 +70,7 @@ def test_fixup_head_editor(repo, bash, fake_editor):
     old = repo.get_commit("HEAD")
     with fake_editor(b"fixup_head_editor test\n\nanother line\n") as f:
         fixup_helper(
-            repo,
-            bash,
-            ["-e"],
-            "HEAD",
-            "fixup_head_editor test\n\nanother line\n",
+            repo, bash, ["-e"], "HEAD", "fixup_head_editor test\n\nanother line\n"
         )
         assert f.read().startswith(old.message)
 
@@ -85,11 +81,7 @@ def test_fixup_nonhead_editor(repo, bash, fake_editor):
     old = repo.get_commit("HEAD~")
     with fake_editor(b"fixup_nonhead_editor test\n\nanother line\n") as f:
         fixup_helper(
-            repo,
-            bash,
-            ["-e"],
-            "HEAD~",
-            "fixup_nonhead_editor test\n\nanother line\n",
+            repo, bash, ["-e"], "HEAD~", "fixup_nonhead_editor test\n\nanother line\n"
         )
         assert f.read().startswith(old.message)
 

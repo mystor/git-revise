@@ -4,17 +4,7 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import hashlib
 import re
-from typing import (
-    TypeVar,
-    Type,
-    Dict,
-    Union,
-    Sequence,
-    Optional,
-    Mapping,
-    Tuple,
-    cast,
-)
+from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
 from pathlib import Path
 from enum import Enum
 from subprocess import Popen, run, PIPE
@@ -47,11 +37,7 @@ class Oid(bytes):
     def for_object(cls, tag: str, body: bytes):
         m = hashlib.sha1()
         m.update(
-            tag.encode("ascii")
-            + b" "
-            + str(len(body)).encode("ascii")
-            + b"\0"
-            + body
+            tag.encode("ascii") + b" " + str(len(body)).encode("ascii") + b"\0" + body
         )
         return cls(m.digest())
 
@@ -91,9 +77,7 @@ class Signature:
             match.group("offset").strip(),
         )
 
-    def __init__(
-        self, name: bytes, email: bytes, timestamp: bytes, offset: bytes
-    ):
+    def __init__(self, name: bytes, email: bytes, timestamp: bytes, offset: bytes):
         self.name = name
         self.email = email
         self.timestamp = timestamp
@@ -101,13 +85,7 @@ class Signature:
 
     def raw(self) -> bytes:
         return (
-            self.name
-            + b" <"
-            + self.email
-            + b"> "
-            + self.timestamp
-            + b" "
-            + self.offset
+            self.name + b" <" + self.email + b"> " + self.timestamp + b" " + self.offset
         )
 
     def __repr__(self):
@@ -162,6 +140,13 @@ class Repository:
         )
         self.objects = defaultdict(dict)
 
+        # Check that cat-file works OK
+        try:
+            self.get_obj(Oid.null())
+            raise IOError("cat-file backend failure")
+        except MissingObject:
+            pass
+
     def new_commit(
         self,
         tree: "Tree",
@@ -198,22 +183,16 @@ class Repository:
 
         body = b""
         for name, entry in sorted(entries.items(), key=entry_key):
-            body += (
-                cast(bytes, entry.mode.value) + b" " + name + b"\0" + entry.oid
-            )
+            body += cast(bytes, entry.mode.value) + b" " + name + b"\0" + entry.oid
         return Tree(self, body)
 
     def index_tree(self) -> "Tree":
-        written = run(
-            ["git", "write-tree"], check=True, stdout=PIPE, cwd=self.workdir
-        )
+        written = run(["git", "write-tree"], check=True, stdout=PIPE, cwd=self.workdir)
         oid = Oid.fromhex(written.stdout.rstrip().decode())
         return self.get_tree(oid)
 
     def commit_staged(self, message: bytes = b"<git index>") -> "Commit":
-        return self.new_commit(
-            self.index_tree(), [self.get_commit("HEAD")], message
-        )
+        return self.new_commit(self.index_tree(), [self.get_commit("HEAD")], message)
 
     def get_obj(self, ref: Union[Oid, str]) -> "GitObj":
         if isinstance(ref, Oid):
@@ -227,10 +206,8 @@ class Repository:
         self.catfile.stdin.flush()
 
         # Read in the response.
-        resp = self.catfile.stdout.readline().decode("ascii").split()
-        if len(resp) < 3:
-            assert resp[1] == "missing"
-
+        resp = self.catfile.stdout.readline().decode("ascii")
+        if resp.endswith("missing\n"):
             # If we have an abbreviated hash, check for in-memory commits.
             try:
                 abbrev = bytes.fromhex(ref)
@@ -243,7 +220,8 @@ class Repository:
             # Not an abbreviated hash, the entry is missing.
             raise MissingObject(ref)
 
-        oid, kind, size = Oid.fromhex(resp[0]), resp[1], int(resp[2])
+        parts = resp.rsplit(maxsplit=2)
+        oid, kind, size = Oid.fromhex(parts[0]), parts[1], int(parts[2])
         body = self.catfile.stdout.read(size + 1)[:-1]
         assert size == len(body), "bad size?"
 
@@ -387,9 +365,7 @@ class Commit(GitObj):
 
     def parent(self) -> "Commit":
         if len(self.parents()) != 1:
-            raise ValueError(
-                f"Commit {self.oid} has {len(self.parents())} parents"
-            )
+            raise ValueError(f"Commit {self.oid} has {len(self.parents())} parents")
         return self.parents()[0]
 
     def summary(self) -> str:

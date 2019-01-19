@@ -118,9 +118,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     return result
 
 
-def apply_todos(
-    current: Commit, todos: List[Step], reauthor: bool = False
-) -> Commit:
+def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> Commit:
     for step in todos:
         rebased = step.commit.rebase(current)
         if step.kind == StepKind.PICK:

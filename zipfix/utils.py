@@ -34,17 +34,13 @@ def run_editor(
             for line in text.splitlines():
                 f.write(line + b"\n")
 
-            if (
-                comments
-            ):  # If comments were provided, write them after the text.
+            if comments:  # If comments were provided, write them after the text.
                 f.write(b"\n")
                 for comment in textwrap.dedent(comments).splitlines():
                     f.write(b"# " + comment.encode("utf-8") + b"\n")
 
         # Invoke the editor
-        proc = subprocess.run(
-            ["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"]
-        )
+        proc = subprocess.run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"])
         if proc.returncode != 0:
             print("editor exited with a non-zero exit code", file=sys.stderr)
             sys.exit(1)
