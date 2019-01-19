@@ -64,16 +64,10 @@ def conflict_prompt(
 
 
 def merge_trees(
-    path: Path,
-    labels: Tuple[str, str, str],
-    current: Tree,
-    base: Tree,
-    other: Tree,
+    path: Path, labels: Tuple[str, str, str], current: Tree, base: Tree, other: Tree
 ) -> Tree:
     # Merge every named entry which is mentioned in any tree.
-    names = set(current.entries.keys()).union(
-        base.entries.keys(), other.entries.keys()
-    )
+    names = set(current.entries.keys()).union(base.entries.keys(), other.entries.keys())
     entries = {}
     for name in names:
         merged = merge_entries(
@@ -143,9 +137,7 @@ def merge_entries(
         return Entry(
             current.repo,
             mode,
-            merge_blobs(
-                path, labels, current.blob(), baseblob, other.blob()
-            ).oid,
+            merge_blobs(path, labels, current.blob(), baseblob, other.blob()).oid,
         )
     elif mode == Mode.DIR:
         basetree = current.repo.new_tree({})
@@ -154,9 +146,7 @@ def merge_entries(
         return Entry(
             current.repo,
             mode,
-            merge_trees(
-                path, labels, current.tree(), basetree, other.tree()
-            ).oid,
+            merge_trees(path, labels, current.tree(), basetree, other.tree()).oid,
         )
     elif mode == Mode.SYMLINK:
         return conflict_prompt(
@@ -170,13 +160,7 @@ def merge_entries(
         )
     elif mode == Mode.GITLINK:
         return conflict_prompt(
-            path,
-            "Submodule",
-            labels,
-            current,
-            str(current.oid),
-            other,
-            str(other.oid),
+            path, "Submodule", labels, current, str(current.oid), other, str(other.oid)
         )
     else:
         raise ValueError("unknown mode")
