@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Set, Optional
 from .odb import Commit, Repository
 from .utils import run_editor
 import re
@@ -37,7 +37,6 @@ class StepKind(Enum):
 
 
 class Step:
-    # pick SHA1... Commit Message Text FOr Helpy Stuff
     kind: StepKind
     commit: Commit
 
@@ -65,34 +64,51 @@ def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
     return steps
 
 
-def edit_todos(repo: Repository, list: List[Commit], index: Optional[Commit]) -> List[Step]:
-    s = ""
-    seen = set()
-    for commit in list:
-        s += f"{Step(StepKind.PICK, commit)}\n"
-        seen.add(commit.oid)
+def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
+    # Invoke the editors to parse commit messages.
+    todos_text = '\n'.join(str(step) for step in todos).encode()
+    response = run_editor("git-zipfix-todo", todos_text, comments=f"""\
+        Interactive Zipfix Todos ({len(todos)} commands)
 
-    if index:
-        s += f"{Step(StepKind.INDEX, index)}\n"
-        seen.add(commit.oid)
+        Commands:
+         p, pick <commit> = use commit
+         r, reword <commit> = use commit, but edit the commit message
+         f, fixup <commit> = use commit, but fuse changes into previous commit
+         i, index <commit> = leave commit changes unstaged
 
-    response = run_editor("git-zipfix-todo", s.encode())
+        These lines can be re-ordered; they are executed from top to bottom.
+
+        If a line is removed, it will be treated like an 'index' line.
+
+        However, if you remove everything, these changes will be aborted.
+        """)
+
+    # Parse the response back into a list of steps
     result = []
+    seen: Set[Commit] = set()
     seen_index = False
     for line in response.splitlines():
         if line.isspace():
             continue
         step = Step.parse(repo, line.decode(errors='replace').strip())
         result.append(step)
-        oid = step.commit.oid
-        if oid in seen:
-            raise ValueError(f"Commit {oid} not from original list or mentioned multiple times")
+
+        # Produce diagnostics for duplicated commits.
+        if step.commit in seen:
+            print(f"(warning) Commit {step.commit} referenced multiple times")
+        seen.add(step.commit)
+
         if step.kind == StepKind.INDEX:
             seen_index = True
         elif seen_index:
-            raise ValueError("index entries may only be at the end of the list")
-        seen.remove(oid)
+            raise ValueError("Non-index todo found after index todo")
 
-    for val in seen:
-        raise ValueError(f"Commit {val} must mentioned in edited list")
+    # Produce diagnostics for missing and/or added commits.
+    before = set(s.commit for s in todos)
+    after = set(s.commit for s in result)
+    for commit in (before - after):
+        print(f"(warning) commit {commit} missing from todo list")
+    for commit in (after - before):
+        print(f"(warning) commit {commit} not in original todo list")
+
     return result

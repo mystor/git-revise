@@ -13,7 +13,7 @@ import sys
 
 from .odb import Repository, Commit
 from .utils import commit_range, run_editor, edit_commit_message, update_head
-from .todo import edit_todos, StepKind
+from .todo import build_todos, edit_todos, StepKind
 
 __version__ = '0.1'
 
@@ -49,7 +49,9 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     current = repo.getcommit(args.target)
     to_rebase = commit_range(current, head)
 
-    steps = edit_todos(repo, to_rebase, staged)
+    todos = build_todos(to_rebase, staged)
+    steps = edit_todos(repo, todos)
+
     for step in steps:
         rebased = step.commit.rebase(current)
         if step.kind == StepKind.PICK:
