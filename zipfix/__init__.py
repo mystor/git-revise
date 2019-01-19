@@ -14,7 +14,9 @@ import sys
 # Re-export primitives from the odb module to expose them at the root.
 from .odb import MissingObject, Oid, Signature, Repository, GitObj, Commit, Mode, Entry, Tree, Blob
 
-from .utils import run_editor
+from .utils import run_editor, edit_commit_message, update_head
+
+from .todo import thingy, StepKind
 
 __version__ = '0.1'
 
@@ -57,7 +59,27 @@ def parser() -> ArgumentParser:
 
 
 def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    pass
+    head = repo.getcommit(args.ref)
+    current = repo.getcommit(args.target)
+    to_rebase = commit_range(current, head)
+
+    steps = thingy(repo, to_rebase, staged)
+    for step in steps:
+        rebased = step.commit.rebase(current)
+        if step.kind == StepKind.PICK:
+            current = rebased
+        elif step.kind == StepKind.FIXUP:
+            current = current.update(tree=rebased.tree())
+        elif step.kind == StepKind.REWORD:
+            current = edit_commit_message(current)
+        elif step.kind == StepKind.INDEX:
+            break
+        else:
+            raise ValueError(f"Unknown StepKind value: {step.kind}")
+
+        print(f"{current.oid.short()} {current.summary()}")
+
+    update_head(args.ref, head, current, None)
 
 
 def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
@@ -80,38 +102,21 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
     # Prompt the user to edit the commit message if requested.
     if args.edit:
-        message = run_editor('COMMIT_EDITMSG', current.message, comments="""\
-            Please enter the commit message for your changes. Lines starting
-            with '#' will be ignored, and an empty message aborts the commit.
-            """)
-        current = current.update(message=message)
+        current = edit_commit_message(current)
 
     # Rewrite the author to match the current user if requested.
     if args.reauthor:
         current = current.update(author=repo.default_author)
 
     if current != replaced:
-        print(f"{str(current.oid)[:16]} {current.summary()}")
+        print(f"{current.oid.short()} {current.summary()}")
 
         # Rebase commits atop the commit range.
         for commit in to_rebase:
             current = commit.rebase(current)
-            print(f"{str(current.oid)[:16]} {current.summary()}")
+            print(f"{current.oid.short()} {current.summary()}")
 
-        # Update the HEAD commit to point to the new value.
-        print(f"Updating {args.ref} ({head.oid} => {current.oid})")
-        current.update_ref(args.ref, "git-zipfix rewrite", head.oid)
-
-        # We expect our tree to match the tree we started with (including index
-        # changes). If it does not, print out a warning.
-        if current.tree() != final:
-            print("(warning) unexpected final tree\n"
-                  f"(note) expected: {final.oid}\n"
-                  f"(note) actual: {current.tree().oid}\n"
-                  "(note) working directory & index have not been updated.\n"
-                  "(note) use `git status` to see what has changed.",
-                  file=sys.stderr)
-            sys.exit(1)
+        update_head(args.ref, head, current, final)
     else:
         print(f"(warning) no changes performed", file=sys.stderr)
 
@@ -128,16 +133,11 @@ def main(argv):
             sys.exit(1)
 
     # Create a commit with changes from the index
-    head = repo.getcommit('HEAD')
-    staged = None
-    if not args.no_index:
-        staged = repo.commit_staged(b"<git index>")
+    staged = None if args.no_index else repo.commit_staged(b"<git index>")
+    if staged and staged.tree() == staged.parent().tree():
+        staged = None  # No changes, ignore the commit
 
-        # Check if there were no staged changes to consider, and don't bother
-        # creating the 'staged' commit.
-        if staged.tree() == head.tree():
-            staged = None
-
+    # Either enter the interactive or non-interactive codepath.
     if args.interactive:
         interactive(args, repo, staged)
     else:
