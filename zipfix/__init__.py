@@ -15,32 +15,56 @@ from .odb import Repository, Commit
 from .utils import commit_range, run_editor, edit_commit_message, update_head
 from .todo import apply_todos, build_todos, edit_todos, StepKind
 
-__version__ = '0.1'
+__version__ = "0.1"
 
 
 def parser() -> ArgumentParser:
-    parser = ArgumentParser(description='''\
+    parser = ArgumentParser(
+        description="""\
         Rebase staged changes onto the given commit, and rewrite history to
-        incorporate these changes.''')
-    parser.add_argument('target', help='target commit to apply fixups to')
-    parser.add_argument('--ref', default='HEAD', help='reference to update')
-    parser.add_argument('--reauthor', action='store_true',
-                        help='reset the author of the targeted commit')
-    parser.add_argument('--version', action='version', version=__version__)
+        incorporate these changes."""
+    )
+    parser.add_argument("target", help="target commit to apply fixups to")
+    parser.add_argument("--ref", default="HEAD", help="reference to update")
+    parser.add_argument(
+        "--reauthor",
+        action="store_true",
+        help="reset the author of the targeted commit",
+    )
+    parser.add_argument("--version", action="version", version=__version__)
 
     index_group = parser.add_mutually_exclusive_group()
-    index_group.add_argument('--no-index', action='store_true',
-                             help='ignore the index while rewriting history')
-    index_group.add_argument('--all', '-a', action='store_true',
-                             help='stage all tracked files before running')
+    index_group.add_argument(
+        "--no-index",
+        action="store_true",
+        help="ignore the index while rewriting history",
+    )
+    index_group.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        help="stage all tracked files before running",
+    )
 
     msg_group = parser.add_mutually_exclusive_group()
-    msg_group.add_argument('--interactive', '-i', action='store_true',
-                           help='interactively edit commit stack')
-    msg_group.add_argument('--edit', '-e', action='store_true',
-                           help='edit commit message of targeted commit')
-    msg_group.add_argument('--message', '-m', action='append',
-                           help='specify commit message on command line')
+    msg_group.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="interactively edit commit stack",
+    )
+    msg_group.add_argument(
+        "--edit",
+        "-e",
+        action="store_true",
+        help="edit commit message of targeted commit",
+    )
+    msg_group.add_argument(
+        "--message",
+        "-m",
+        action="append",
+        help="specify commit message on command line",
+    )
     return parser
 
 
@@ -77,7 +101,7 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
     # Update the commit message on the target commit if requested.
     if args.message:
-        message = b'\n'.join(l.encode('utf-8') + b'\n' for l in args.message)
+        message = b"\n".join(l.encode("utf-8") + b"\n" for l in args.message)
         current = current.update(message=message)
 
     # Prompt the user to edit the commit message if requested.
@@ -122,4 +146,3 @@ def main(argv):
         interactive(args, repo, staged)
     else:
         noninteractive(args, repo, staged)
-
