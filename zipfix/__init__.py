@@ -46,14 +46,18 @@ def parser() -> ArgumentParser:
 
 def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     head = repo.getcommit(args.ref)
-    current = repo.getcommit(args.target)
-    to_rebase = commit_range(current, head)
+    target = repo.getcommit(args.target)
+    to_rebase = commit_range(target, head)
 
-    # Build up an initial todos list, edit that todos list, and then apply the
-    # changes.
-    todos = build_todos(to_rebase, staged)
-    todos = edit_todos(repo, todos)
-    new_head = apply_todos(current, todos, reauthor=args.reauthor)
+    # Build up an initial todos list, edit that todos list.
+    current = build_todos(to_rebase, staged)
+    todos = edit_todos(repo, current)
+    if current == todos:
+        print("(warning) no changes performed", file=sys.stderr)
+        return
+
+    # Perform the todo list actions.
+    new_head = apply_todos(target, todos, reauthor=args.reauthor)
 
     # Update the value of HEAD to the new state.
     update_head(args.ref, head, new_head, None)
