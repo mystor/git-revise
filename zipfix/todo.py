@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Set, Optional
 from .odb import Commit, Oid, Repository
-from .utils import run_editor
+from .utils import run_editor, edit_commit_message
 import re
 
 class StepKind(Enum):
@@ -112,3 +112,25 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
         print(f"(warning) commit {oid} not in original todo list")
 
     return result
+
+
+def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> Commit:
+    for step in todos:
+        rebased = step.commit.rebase(current)
+        if step.kind == StepKind.PICK:
+            current = rebased
+        elif step.kind == StepKind.FIXUP:
+            current = current.update(tree=rebased.tree())
+        elif step.kind == StepKind.REWORD:
+            current = edit_commit_message(current)
+        elif step.kind == StepKind.INDEX:
+            break
+        else:
+            raise ValueError(f"Unknown StepKind value: {step.kind}")
+
+        if reauthor:
+            current = current.update(author=current.repo.default_author)
+
+        print(f"{current.oid.short()} {current.summary()}")
+
+    return current
