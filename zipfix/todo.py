@@ -22,7 +22,7 @@ class StepKind(Enum):
         raise TypeError()
 
     @staticmethod
-    def parse(s: str) -> StepKind:
+    def parse(s: str) -> 'StepKind':
         if len(s) < 1:
             raise ValueError()
         if 'pick'.startswith(s):
@@ -49,7 +49,7 @@ class Step:
         self.commit = commit
 
     @staticmethod
-    def parse(repo: Repository, s: str) -> Step:
+    def parse(repo: Repository, s: str) -> 'Step':
         parsed = re.match('(?P<command>\S+)\s(?P<hash>\S+)', s)
         if not parsed:
             raise ValueError(f"todo entry '{s}' must follow format <keyword> <sha> <optional message>")
