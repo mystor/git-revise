@@ -44,28 +44,36 @@ def test_reword_head_editor(repo, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
-    with fake_editor(b"reword_head_editor test\n\nanother line\n") as f:
+
+    def editor(inq, outq):
+        assert inq.get().startswith(old.message)
+        outq.put(b"reword_head_editor test\n\nanother line\n")
+
+    with fake_editor(editor):
         reword_helper(
             repo,
             ["--no-index", "-e"],
             "HEAD",
             "reword_head_editor test\n\nanother line\n",
         )
-        assert f.read().startswith(old.message)
 
 
 def test_reword_nonhead_editor(repo, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
-    with fake_editor(b"reword_nonhead_editor test\n\nanother line\n") as f:
+
+    def editor(inq, outq):
+        assert inq.get().startswith(old.message)
+        outq.put(b"reword_nonhead_editor test\n\nanother line\n")
+
+    with fake_editor(editor):
         reword_helper(
             repo,
             ["--no-index", "-e"],
             "HEAD~",
             "reword_nonhead_editor test\n\nanother line\n",
         )
-        assert f.read().startswith(old.message)
 
 
 def test_reword_root(repo, bash):

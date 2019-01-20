@@ -7,6 +7,10 @@ import subprocess
 from pathlib import Path
 from zipfix import Repository
 from contextlib import contextmanager
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from io import BytesIO
+from queue import Queue, Empty
 
 
 RESOURCES = Path(__file__).parent / "resources"
@@ -56,40 +60,65 @@ def repo(tmp_path_factory, monkeypatch, bash):
 @pytest.fixture
 def fake_editor(tmp_path_factory, monkeypatch):
     @contextmanager
-    def fake_editor(text):
+    def fake_editor(handler):
         tmpdir = tmp_path_factory.mktemp("editor")
-        out = tmpdir / "out"
-        flag = tmpdir / "flag"
 
-        # Build the script to be run as "editor"
-        script = tmpdir / "fake_editor"
-        with open(script, "w") as scriptf:
-            scriptf.write(
-                textwrap.dedent(
-                    f"""\
-                    #!{sys.executable}
-                    import sys
-                    with open(sys.argv[1], 'rb+') as f:
-                        # Stash old value
-                        with open({repr(str(out))}, 'wb') as oldf:
-                            oldf.write(f.read())
+        # Write out the script
+        script = textwrap.dedent(
+            f"""\
+            #!{sys.executable}
+            import sys
+            from pathlib import Path
+            from urllib.request import urlopen
 
-                        # Replace file contents
-                        f.seek(0)
-                        f.truncate()
-                        f.write({repr(text)})
+            path = Path(sys.argv[1])
+            resp = urlopen("http://127.0.0.1:8190/", data=path.read_bytes())
+            length = int(resp.headers.get("content-length"))
+            path.write_bytes(resp.read(length))
+            """
+        )
+        script_path = tmpdir / "editor"
+        script_path.write_bytes(script.encode())
+        script_path.chmod(0o755)
+        monkeypatch.setenv("EDITOR", str(script_path))
 
-                        # Create a file with the given name
-                        open({repr(str(flag))}, 'wb').close()
-                    """
-                )
-            )
-        script.chmod(0o755)
+        inq = Queue()
+        outq = Queue()
+        excq = Queue()
 
-        with monkeypatch.context() as cx, open(out, "wb+") as outf:
-            cx.setenv("EDITOR", str(script))
-            assert not flag.exists(), "Editor shouldn't have been run yet"
-            yield outf
-            assert flag.exists(), "Editor should have been run"
+        def wrapper():
+            try:
+                handler(inq, outq)
+            except Exception:
+                print("Error in exception handler", file=sys.stderr)
+                excq.put(sys.exc_info())
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("content-length"))
+                inq.put(self.rfile.read(length))
+                new = outq.get()
+
+                self.send_response(200)
+                self.send_header("content-length", len(new))
+                self.end_headers()
+                self.wfile.write(new)
+
+        # Start the HTTP manager
+        server = HTTPServer(("127.0.0.1", 8190), Handler)
+        try:
+            Thread(target=wrapper, daemon=True).start()
+            Thread(target=server.serve_forever, daemon=True).start()
+
+            yield
+
+            # Re-raise any queued exceptions
+            try:
+                raise excq.get_nowait()
+            except Empty:
+                pass
+        finally:
+            server.shutdown()
+            server.server_close()
 
     return fake_editor
