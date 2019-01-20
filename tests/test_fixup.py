@@ -68,22 +68,28 @@ def test_fixup_head_editor(repo, bash, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
-    with fake_editor(b"fixup_head_editor test\n\nanother line\n") as f:
-        fixup_helper(
-            repo, bash, ["-e"], "HEAD", "fixup_head_editor test\n\nanother line\n"
-        )
-        assert f.read().startswith(old.message)
+    newmsg = "fixup_head_editor test\n\nanother line\n"
+
+    def editor(inq, outq):
+        assert inq.get().startswith(old.message)
+        outq.put(newmsg.encode())
+
+    with fake_editor(editor):
+        fixup_helper(repo, bash, ["-e"], "HEAD", newmsg)
 
 
 def test_fixup_nonhead_editor(repo, bash, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
-    with fake_editor(b"fixup_nonhead_editor test\n\nanother line\n") as f:
-        fixup_helper(
-            repo, bash, ["-e"], "HEAD~", "fixup_nonhead_editor test\n\nanother line\n"
-        )
-        assert f.read().startswith(old.message)
+    newmsg = "fixup_nonhead_editor test\n\nanother line\n"
+
+    def editor(inq, outq):
+        assert inq.get().startswith(old.message)
+        outq.put(newmsg.encode())
+
+    with fake_editor(editor):
+        fixup_helper(repo, bash, ["-e"], "HEAD~", newmsg)
 
 
 def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
@@ -96,24 +102,42 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
     old = repo.get_commit("HEAD~")
     assert old.persisted
 
-    with fake_editor(b"conflict\n") as fd:
+    def editor(inq, outq):
+        assert (
+            textwrap.dedent(
+                """\
+                <<<<<<< /file1 (new parent)
+                Hello, World!
+
+                =======
+                conflict
+                >>>>>>> /file1 (incoming)
+                """
+            ).encode()
+            == inq.get()
+        )
+        outq.put(b"conflict1\n")
+
+        assert (
+            textwrap.dedent(
+                """\
+                <<<<<<< /file1 (new parent)
+                conflict1
+                =======
+                Hello, World!
+                Oops, gotta add a new line!
+
+                >>>>>>> /file1 (incoming)
+                """
+            ).encode()
+            == inq.get()
+        )
+        outq.put(b"conflict2\n")
+
+    with fake_editor(editor):
         monkeypatch.setattr("sys.stdin", StringIO("y\ny\ny\ny\n"))
 
         zipfix.main(["HEAD~"])
-        old_file = fd.read().decode()
-
-        print(old_file)
-        assert old_file == textwrap.dedent(
-            """\
-            <<<<<<< /file1 (new parent)
-            conflict
-            =======
-            Hello, World!
-            Oops, gotta add a new line!
-
-            >>>>>>> /file1 (incoming)
-            """
-        )
 
         new = repo.get_commit("HEAD~")
         assert new.persisted
