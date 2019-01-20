@@ -4,6 +4,7 @@ import os
 import sys
 import textwrap
 import subprocess
+import traceback
 from pathlib import Path
 from zipfix import Repository
 from contextlib import contextmanager
@@ -90,14 +91,14 @@ def fake_editor(tmp_path_factory, monkeypatch):
             try:
                 handler(inq, outq)
             except Exception:
-                print("Error in exception handler", file=sys.stderr)
+                traceback.print_exc()
                 excq.put(sys.exc_info())
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 length = int(self.headers.get("content-length"))
                 inq.put(self.rfile.read(length))
-                new = outq.get()
+                new = outq.get(timeout=1)
 
                 self.send_response(200)
                 self.send_header("content-length", len(new))
