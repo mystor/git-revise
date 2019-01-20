@@ -1,4 +1,10 @@
 [MESSAGES CONTROL]
 
-disable=all
-
+disable=
+    bad-continuation,
+    missing-docstring,
+    too-many-arguments,
+    too-many-branches,
+    too-many-return-statements,
+    cyclic-import,
+    fixme

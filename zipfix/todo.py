@@ -1,8 +1,9 @@
+import re
 from enum import Enum
 from typing import List, Set, Optional
+
 from .odb import Commit, Oid, Repository
 from .utils import run_editor, edit_commit_message
-import re
 
 
 class StepKind(Enum):
@@ -15,17 +16,17 @@ class StepKind(Enum):
         return self.value
 
     @staticmethod
-    def parse(s: str) -> "StepKind":
-        if "pick".startswith(s):
+    def parse(instr: str) -> "StepKind":
+        if "pick".startswith(instr):
             return StepKind.PICK
-        if "fixup".startswith(s):
+        if "fixup".startswith(instr):
             return StepKind.FIXUP
-        if "reword".startswith(s):
+        if "reword".startswith(instr):
             return StepKind.REWORD
-        if "index".startswith(s):
+        if "index".startswith(instr):
             return StepKind.INDEX
         raise ValueError(
-            f"step kind '{s}' must be one of: pick, fixup, reword, or index"
+            f"step kind '{instr}' must be one of: pick, fixup, reword, or index"
         )
 
 
@@ -38,11 +39,11 @@ class Step:
         self.commit = commit
 
     @staticmethod
-    def parse(repo: Repository, s: str) -> "Step":
-        parsed = re.match(r"(?P<command>\S+)\s(?P<hash>\S+)", s)
+    def parse(repo: Repository, instr: str) -> "Step":
+        parsed = re.match(r"(?P<command>\S+)\s(?P<hash>\S+)", instr)
         if not parsed:
             raise ValueError(
-                f"todo entry '{s}' must follow format <keyword> <sha> <optional message>"
+                f"todo entry '{instr}' must follow format <keyword> <sha> <optional message>"
             )
         kind = StepKind.parse(parsed.group("command"))
         commit = repo.get_commit(parsed.group("hash"))

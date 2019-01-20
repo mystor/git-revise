@@ -10,16 +10,15 @@ files and generate. This algorithm, on the other hand, avoids looking at
 unmodified trees and blobs when possible.
 """
 
-from .odb import Repository, Oid, GitObj, Tree, Blob, Commit, Entry, Mode
-from typing import Sequence, Optional, Type, Tuple, TypeVar
+from typing import Optional, Tuple, TypeVar
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from subprocess import run, PIPE, DEVNULL
-import subprocess
-import textwrap
+from subprocess import run, PIPE
+
+from .odb import Tree, Blob, Commit, Entry, Mode
 
 
-T = TypeVar("T")
+T = TypeVar("T")  # pylint: disable=C0103
 
 
 class MergeConflict(Exception):
@@ -55,10 +54,10 @@ def conflict_prompt(
     print(f"{descr} conflict for '{path}'")
     print(f"  (1) {labels[0]}: {current_descr}")
     print(f"  (2) {labels[1]}: {other_descr}")
-    ch = input("Resolution or (A)bort? ")
-    if ch == "1":
+    char = input("Resolution or (A)bort? ")
+    if char == "1":
         return current
-    elif ch == "2":
+    if char == "2":
         return other
     raise MergeConflict("aborted")
 
@@ -91,9 +90,9 @@ def merge_entries(
 ) -> Optional[Entry]:
     if base == current:
         return other  # no change from base -> current
-    elif base == other:
+    if base == other:
         return current  # no change from base -> other
-    elif current == other:
+    if current == other:
         return current  # base -> current & base -> other are identical
 
     # If one of the branches deleted the entry, and the other modified it,
@@ -139,7 +138,7 @@ def merge_entries(
             mode,
             merge_blobs(path, labels, current.blob(), baseblob, other.blob()).oid,
         )
-    elif mode == Mode.DIR:
+    if mode == Mode.DIR:
         basetree = current.repo.new_tree({})
         if base and base.mode == Mode.DIR:
             basetree = base.tree()
@@ -148,7 +147,7 @@ def merge_entries(
             mode,
             merge_trees(path, labels, current.tree(), basetree, other.tree()).oid,
         )
-    elif mode == Mode.SYMLINK:
+    if mode == Mode.SYMLINK:
         return conflict_prompt(
             path,
             "Symlink",
@@ -158,12 +157,12 @@ def merge_entries(
             other,
             other.symlink().decode(),
         )
-    elif mode == Mode.GITLINK:
+    if mode == Mode.GITLINK:
         return conflict_prompt(
             path, "Submodule", labels, current, str(current.oid), other, str(other.oid)
         )
-    else:
-        raise ValueError("unknown mode")
+
+    raise ValueError("unknown mode")
 
 
 def merge_blobs(
@@ -210,7 +209,7 @@ def merge_blobs(
         # if there were conflicts.
         if process.returncode == 0:
             return Blob(current.repo, process.stdout)
-        elif process.returncode < 0:
+        if process.returncode < 0:
             raise MergeConflict("git merge-file errored")
 
         # There was a merge conflict.
@@ -221,9 +220,7 @@ def merge_blobs(
         # Open the editor on the conflicted file.
         conflicts = tmpdir / "conflicts"
         conflicts.write_bytes(process.stdout)
-        proc = subprocess.run(
-            ["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"]
-        )
+        proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
 
         # Print notes about the merge if errors were found
         merged = conflicts.read_bytes()

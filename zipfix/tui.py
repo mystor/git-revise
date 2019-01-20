@@ -1,18 +1,16 @@
-from typing import Tuple, List, Optional
+from typing import Optional
 from argparse import ArgumentParser, Namespace
-from pathlib import Path
 import subprocess
-import textwrap
 import sys
 
 from .odb import Repository, Commit
-from .utils import commit_range, run_editor, edit_commit_message, update_head
-from .todo import apply_todos, build_todos, edit_todos, StepKind
+from .utils import commit_range, edit_commit_message, update_head
+from .todo import apply_todos, build_todos, edit_todos
 
 __version__ = "0.1"
 
 
-def parser() -> ArgumentParser:
+def build_parser() -> ArgumentParser:
     parser = ArgumentParser(
         description="""\
         Rebase staged changes onto the given commit, and rewrite history to
@@ -120,7 +118,7 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
 
 def main(argv):
-    args = parser().parse_args(argv)
+    args = build_parser().parse_args(argv)
     repo = Repository()
 
     # If '-a' was specified, stage all changes.

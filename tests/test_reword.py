@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from zipfix.odb import Commit
 from zipfix.tui import main
 

@@ -4,7 +4,7 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import hashlib
 import re
-from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
+from typing import TypeVar, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
 from pathlib import Path
 from enum import Enum
 from subprocess import Popen, run, PIPE
@@ -23,8 +23,8 @@ class Oid(bytes):
         return super().__new__(cls, b)  # type: ignore
 
     @classmethod
-    def fromhex(cls, hex: str) -> "Oid":
-        return Oid(bytes.fromhex(hex))
+    def fromhex(cls, instr: str) -> "Oid":
+        return Oid(bytes.fromhex(instr))
 
     @classmethod
     def null(cls) -> "Oid":
@@ -35,11 +35,11 @@ class Oid(bytes):
 
     @classmethod
     def for_object(cls, tag: str, body: bytes):
-        m = hashlib.sha1()
-        m.update(
+        hasher = hashlib.sha1()
+        hasher.update(
             tag.encode("ascii") + b" " + str(len(body)).encode("ascii") + b"\0" + body
         )
-        return cls(m.digest())
+        return cls(hasher.digest())
 
     def __repr__(self) -> str:
         return self.hex()
@@ -314,10 +314,10 @@ class GitObj:
         self.persisted = True
 
     def persist_deps(self):
-        ...
+        pass
 
     def parse_body(self):
-        ...
+        pass
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GitObj):
@@ -436,7 +436,7 @@ class Mode(Enum):
         return self in (Mode.REGULAR, Mode.EXEC)
 
 
-class Entry(object):
+class Entry:
     repo: Repository
     mode: Mode
     oid: Oid
@@ -484,7 +484,7 @@ class Tree(GitObj):
     def parse_body(self):
         self.entries = {}
         rest = self.body
-        while len(rest) > 0:
+        while rest:
             mode, rest = rest.split(b" ", maxsplit=1)
             name, rest = rest.split(b"\0", maxsplit=1)
             entry_oid = Oid(rest[:20])

@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import pytest
 import shutil
 import os
@@ -10,7 +12,6 @@ from zipfix.odb import Repository
 from contextlib import contextmanager
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from io import BytesIO
 from queue import Queue, Empty
 
 

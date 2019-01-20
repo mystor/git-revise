@@ -30,14 +30,14 @@ def run_editor(
     """Run the editor configured for git to edit the given text"""
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / filename
-        with open(path, "wb") as f:
+        with open(path, "wb") as handle:
             for line in text.splitlines():
-                f.write(line + b"\n")
+                handle.write(line + b"\n")
 
             if comments:  # If comments were provided, write them after the text.
-                f.write(b"\n")
+                handle.write(b"\n")
                 for comment in textwrap.dedent(comments).splitlines():
-                    f.write(b"# " + comment.encode("utf-8") + b"\n")
+                    handle.write(b"# " + comment.encode("utf-8") + b"\n")
 
         # Invoke the editor
         proc = subprocess.run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"])
@@ -47,8 +47,8 @@ def run_editor(
 
         # Read in all lines from the edited file.
         lines = []
-        with open(path, "rb") as of:
-            for line in of.readlines():
+        with open(path, "rb") as handle:
+            for line in handle.readlines():
                 if comments and line.startswith(b"#"):
                     continue
                 lines.append(line)
