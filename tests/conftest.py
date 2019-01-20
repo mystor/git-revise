@@ -6,7 +6,7 @@ import textwrap
 import subprocess
 import traceback
 from pathlib import Path
-from zipfix import Repository
+from zipfix.odb import Repository
 from contextlib import contextmanager
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler

@@ -1,6 +1,6 @@
-import zipfix
 import textwrap
-from zipfix import Commit
+from zipfix.odb import Commit
+from zipfix.tui import main
 
 
 def test_interactive_reorder(repo, bash, fake_editor):
@@ -44,7 +44,7 @@ def test_interactive_reorder(repo, bash, fake_editor):
         )
 
     with fake_editor(editor):
-        zipfix.main(["-i", "HEAD~~"])
+        main(["-i", "HEAD~~"])
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()
@@ -116,7 +116,7 @@ def test_interactive_fixup(repo, bash, fake_editor):
         )
 
     with fake_editor(editor):
-        zipfix.main(["-i", "HEAD~~"])
+        main(["-i", "HEAD~~"])
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()

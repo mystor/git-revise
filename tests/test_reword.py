@@ -1,5 +1,5 @@
-import zipfix
-from zipfix import Commit
+from zipfix.odb import Commit
+from zipfix.tui import main
 
 
 def reword_helper(repo, flags, target, message):
@@ -7,7 +7,7 @@ def reword_helper(repo, flags, target, message):
     assert old.message != message.encode()
     assert old.persisted
 
-    zipfix.main(flags + [target])
+    main(flags + [target])
 
     new = repo.get_commit(target)
     assert old != new, "commit was modified"
@@ -92,7 +92,7 @@ def test_reword_root(repo, bash):
     assert old.parents() == []
     assert old.message == b"initial commit\n"
 
-    zipfix.main(["-m", "my new message", "HEAD~"])
+    main(["-m", "my new message", "HEAD~"])
 
     new = repo.get_commit("HEAD~")
     assert new.parents() == []

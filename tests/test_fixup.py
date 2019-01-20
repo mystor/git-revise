@@ -1,6 +1,6 @@
 from io import StringIO
-import zipfix
-from zipfix import Commit
+from zipfix.odb import Commit
+from zipfix.tui import main
 
 
 def fixup_helper(repo, bash, flags, target, message=None):
@@ -14,7 +14,7 @@ def fixup_helper(repo, bash, flags, target, message=None):
         """
     )
 
-    zipfix.main(flags + [target])
+    main(flags + [target])
 
     new = repo.get_commit(target)
     assert old != new, "commit was modified"
@@ -137,7 +137,7 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
     with fake_editor(editor):
         monkeypatch.setattr("sys.stdin", StringIO("y\ny\ny\ny\n"))
 
-        zipfix.main(["HEAD~"])
+        main(["HEAD~"])
 
         new = repo.get_commit("HEAD~")
         assert new.persisted
