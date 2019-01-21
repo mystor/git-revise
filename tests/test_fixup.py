@@ -1,8 +1,8 @@
 # pylint: skip-file
 
 from io import StringIO
-from zipfix.odb import Commit
-from zipfix.tui import main
+from gitrevise.odb import Commit
+from gitrevise.tui import main
 
 
 def fixup_helper(repo, bash, flags, target, message=None):

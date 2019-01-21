@@ -1,20 +1,20 @@
 from setuptools import setup, find_packages
 
-import zipfix
+import gitrevise
 
 setup(
-    name="zipfix",
-    version=zipfix.__version__,
+    name="git-revise",
+    version=gitrevise.__version__,
     packages=find_packages(),
-    scripts=["git-zipfix"],
+    scripts=["git-revise"],
     author="Nika Layzell",
     author_email="nika@thelayzells.com",
     description="Quickly apply fixups to local git commits",
     license="MIT",
-    keywords="git zipfix",
-    url="https://github.com/mystor/git-zipfix",
+    keywords="git revise",
+    url="https://github.com/mystor/git-revise",
     project_urls={
-        "Bug Tracker": "https://github.com/mystor/git-zipfix/issues/",
-        "Source Code": "https://github.com/mystor/git-zipfix/",
+        "Bug Tracker": "https://github.com/mystor/git-revise/issues/",
+        "Source Code": "https://github.com/mystor/git-revise/",
     },
 )

@@ -1,8 +1,8 @@
 # pylint: skip-file
 
 import textwrap
-from zipfix.odb import Commit
-from zipfix.tui import main
+from gitrevise.odb import Commit
+from gitrevise.tui import main
 
 
 def test_interactive_reorder(repo, bash, fake_editor):

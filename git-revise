@@ -3,7 +3,7 @@
 
 import sys
 
-import zipfix.tui
+import gitrevise.tui
 
 if __name__ == '__main__':
-    zipfix.tui.main(sys.argv[1:])
+    gitrevise.tui.main(sys.argv[1:])

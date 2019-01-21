@@ -1,7 +1,7 @@
 # pylint: skip-file
 
-from zipfix.odb import Commit
-from zipfix.tui import main
+from gitrevise.odb import Commit
+from gitrevise.tui import main
 
 
 def reword_helper(repo, flags, target, message):

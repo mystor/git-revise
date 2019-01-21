@@ -76,7 +76,7 @@ def edit_commit_message(commit: Commit) -> Commit:
 def update_head(ref: str, old: Commit, new: Commit, expected: Optional[Tree]):
     # Update the HEAD commit to point to the new value.
     print(f"Updating {ref} ({old.oid} => {new.oid})")
-    new.update_ref(ref, "git-zipfix rewrite", old.oid)
+    new.update_ref(ref, "git-revise rewrite", old.oid)
 
     # We expect our tree to match the tree we started with (including index
     # changes). If it does not, print out a warning.
