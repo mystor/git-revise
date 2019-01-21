@@ -4,6 +4,9 @@
 git-revise is a tool to make it easier and faster to perform modifications on
 historical commits within large repositories.
 
+> **NOTE** This readme is a bit out-of-date. It will be updated soon with
+> more accorate examples of current usage of this script.
+
 The command `git revise $1` is, in effect, a more efficient version of the
 following common snippet:
 
