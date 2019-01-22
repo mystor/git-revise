@@ -9,6 +9,7 @@ from .utils import run_editor, edit_commit_message
 class StepKind(Enum):
     PICK = "pick"
     FIXUP = "fixup"
+    SQUASH = "squash"
     REWORD = "reword"
     INDEX = "index"
 
@@ -21,6 +22,8 @@ class StepKind(Enum):
             return StepKind.PICK
         if "fixup".startswith(instr):
             return StepKind.FIXUP
+        if "squash".startswith(instr):
+            return StepKind.SQUASH
         if "reword".startswith(instr):
             return StepKind.REWORD
         if "index".startswith(instr):
@@ -78,6 +81,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
          p, pick <commit> = use commit
          r, reword <commit> = use commit, but edit the commit message
          f, fixup <commit> = use commit, but fuse changes into previous commit
+         s, squash <commit> = like fixup, but also edit the commit message
          i, index <commit> = leave commit changes unstaged
 
         These lines can be re-ordered; they are executed from top to bottom.
@@ -127,6 +131,10 @@ def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> C
         elif step.kind == StepKind.FIXUP:
             current = current.update(tree=rebased.tree())
         elif step.kind == StepKind.REWORD:
+            current = edit_commit_message(current)
+        elif step.kind == StepKind.SQUASH:
+            fused = current.message + b"\n\n" + rebased.message
+            current = current.update(tree=rebased.tree(), message=fused)
             current = edit_commit_message(current)
         elif step.kind == StepKind.INDEX:
             break
