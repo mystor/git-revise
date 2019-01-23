@@ -1,12 +1,10 @@
 from typing import List, Optional
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from subprocess import run, PIPE
 import textwrap
 import sys
 import os
 
-from .odb import Commit, Tree, Oid
+from .odb import Repository, Commit, Tree, Oid
 
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
@@ -21,71 +19,69 @@ def commit_range(base: Commit, tip: Commit) -> List[Commit]:
 
 
 def run_editor(
+    repo: Repository,
     filename: str,
     text: bytes,
     comments: Optional[str] = None,
     allow_empty: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
-    with TemporaryDirectory() as tmpdir:
-        path = Path(tmpdir) / filename
-        with open(path, "wb") as handle:
-            for line in text.splitlines():
-                handle.write(line + b"\n")
+    path = repo.get_tempdir() / filename
+    with open(path, "wb") as handle:
+        for line in text.splitlines():
+            handle.write(line + b"\n")
 
-            if comments:  # If comments were provided, write them after the text.
-                handle.write(b"\n")
-                for comment in textwrap.dedent(comments).splitlines():
-                    handle.write(b"# " + comment.encode("utf-8") + b"\n")
+        if comments:  # If comments were provided, write them after the text.
+            handle.write(b"\n")
+            for comment in textwrap.dedent(comments).splitlines():
+                handle.write(b"# " + comment.encode("utf-8") + b"\n")
 
-        # Invoke the editor
-        proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"])
-        if proc.returncode != 0:
-            print("editor exited with a non-zero exit code", file=sys.stderr)
-            sys.exit(1)
+    # Invoke the editor
+    proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"])
+    if proc.returncode != 0:
+        print("editor exited with a non-zero exit code", file=sys.stderr)
+        sys.exit(1)
 
-        # Read in all lines from the edited file.
-        lines = []
-        with open(path, "rb") as handle:
-            for line in handle.readlines():
-                if comments and line.startswith(b"#"):
-                    continue
-                lines.append(line)
+    # Read in all lines from the edited file.
+    lines = []
+    with open(path, "rb") as handle:
+        for line in handle.readlines():
+            if comments and line.startswith(b"#"):
+                continue
+            lines.append(line)
 
-        # Concatenate parsed lines, stripping trailing newlines.
-        data = b"".join(lines).rstrip() + b"\n"
-        if data == b"\n" and not allow_empty:
-            print("empty file - aborting", file=sys.stderr)
-            sys.exit(1)
-        return data
+    # Concatenate parsed lines, stripping trailing newlines.
+    data = b"".join(lines).rstrip() + b"\n"
+    if data == b"\n" and not allow_empty:
+        print("empty file - aborting", file=sys.stderr)
+        sys.exit(1)
+    return data
 
 
 def edit_commit_message(commit: Commit) -> Commit:
     # If the target commit is not the initial commit, produce a diff --stat to
     # include in the commit message comments.
     if len(commit.parents()) == 1:
-        diff_proc = run(
-            [
-                "git",
-                "diff-tree",
-                "--stat",
-                commit.parent().tree().persist().hex(),
-                commit.tree().persist().hex(),
-            ],
+        base_tree = commit.parent().tree().persist().hex()
+        commit_tree = commit.tree().persist().hex()
+
+        diff_stat = run(
+            ["git", "diff-tree", "--stat", base_tree, commit_tree],
             check=True,
             stdout=PIPE,
-        )
-        diff_stat = diff_proc.stdout.decode(errors="replace")
+        ).stdout.decode(errors="replace")
     else:
         diff_stat = "<initial commit>"
 
     message = run_editor(
+        commit.repo,
         "COMMIT_EDITMSG",
         commit.message,
         comments=textwrap.dedent(
             """\
             Please enter the commit message for your changes. Lines starting
             with '#' will be ignored, and an empty message aborts the commit.
+
             """
         )
         + diff_stat,
@@ -112,37 +108,35 @@ def update_head(ref: str, old: Commit, new: Commit, expected: Optional[Tree]):
 
 
 def cut_commit(commit: Commit) -> Commit:
-    with TemporaryDirectory() as tmpdir_name:
-        # Create an environment with an explicit index file.
-        env = dict(os.environ)
-        env["GIT_INDEX_FILE"] = os.path.join(tmpdir_name, "TEMP_INDEX")
+    repo = commit.repo
 
-        # Read the target tree into a temporary index.
-        run(
-            ["git", "read-tree", commit.tree().persist().hex()],
-            check=True,
-            env=env,
-            cwd=commit.repo.workdir,
-        )
+    # Create an environment with an explicit index file.
+    temp_index = repo.get_tempdir() / "TEMP_INDEX"
+    env = dict(os.environ)
+    env["GIT_INDEX_FILE"] = str(temp_index)
 
-        # Run an interactive git-reset to allow picking which pieces of the
-        # patch should go into which part.
-        run(
-            ["git", "reset", "--patch", commit.parent().persist().hex()],
-            check=True,
-            env=env,
-            cwd=commit.repo.workdir,
-        )
+    # Read the target tree into a temporary index.
+    run(
+        ["git", "read-tree", commit.tree().persist().hex()],
+        check=True,
+        env=env,
+        cwd=repo.workdir,
+    )
 
-        # Use write-tree to get the new intermediate tree state.
-        written = run(
-            ["git", "write-tree"],
-            check=True,
-            stdout=PIPE,
-            env=env,
-            cwd=commit.repo.workdir,
-        )
-        mid_tree = commit.repo.get_tree(Oid.fromhex(written.stdout.rstrip().decode()))
+    # Run an interactive git-reset to allow picking which pieces of the
+    # patch should go into which part.
+    run(
+        ["git", "reset", "--patch", commit.parent().persist().hex()],
+        check=True,
+        env=env,
+        cwd=repo.workdir,
+    )
+
+    # Use write-tree to get the new intermediate tree state.
+    written = run(
+        ["git", "write-tree"], check=True, stdout=PIPE, env=env, cwd=repo.workdir
+    )
+    mid_tree = repo.get_tree(Oid.fromhex(written.stdout.rstrip().decode()))
 
     # Check if one or the other of the commits will be empty
     if mid_tree == commit.parent().tree() or mid_tree == commit.tree():

@@ -128,22 +128,21 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
 def main(argv):
     args = build_parser().parse_args(argv)
-    repo = Repository()
+    with Repository() as repo:
+        # If '-a' was specified, stage all changes.
+        if args.all:
+            print("Staging all changes")
+            if subprocess.run(["git", "add", "-u"]).returncode != 0:
+                print("Couldn't stage changes", file=sys.stderr)
+                sys.exit(1)
 
-    # If '-a' was specified, stage all changes.
-    if args.all:
-        print("Staging all changes")
-        if subprocess.run(["git", "add", "-u"]).returncode != 0:
-            print("Couldn't stage changes", file=sys.stderr)
-            sys.exit(1)
+        # Create a commit with changes from the index
+        staged = None if args.no_index else repo.commit_staged(b"<git index>")
+        if staged and staged.tree() == staged.parent().tree():
+            staged = None  # No changes, ignore the commit
 
-    # Create a commit with changes from the index
-    staged = None if args.no_index else repo.commit_staged(b"<git index>")
-    if staged and staged.tree() == staged.parent().tree():
-        staged = None  # No changes, ignore the commit
-
-    # Either enter the interactive or non-interactive codepath.
-    if args.interactive:
-        interactive(args, repo, staged)
-    else:
-        noninteractive(args, repo, staged)
+        # Either enter the interactive or non-interactive codepath.
+        if args.interactive:
+            interactive(args, repo, staged)
+        else:
+            noninteractive(args, repo, staged)

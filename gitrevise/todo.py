@@ -75,6 +75,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     # Invoke the editors to parse commit messages.
     todos_text = "\n".join(str(step) for step in todos).encode()
     response = run_editor(
+        repo,
         "git-revise-todo",
         todos_text,
         comments=f"""\

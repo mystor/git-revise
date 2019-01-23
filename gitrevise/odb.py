@@ -4,11 +4,13 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import hashlib
 import re
-from typing import TypeVar, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
+from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
+from types import TracebackType
 from pathlib import Path
 from enum import Enum
 from subprocess import Popen, run, PIPE
 from collections import defaultdict
+from tempfile import TemporaryDirectory
 
 
 class MissingObject(Exception):
@@ -104,13 +106,36 @@ class Signature:
 
 class Repository:
     workdir: Path
+    gitdir: Path
     default_author: "Signature"
     default_committer: "Signature"
     objects: Dict[int, Dict[Oid, "GitObj"]]
     catfile: Popen
+    tempdir: Optional[TemporaryDirectory]
+
+    __slots__ = [
+        "workdir",
+        "gitdir",
+        "default_author",
+        "default_committer",
+        "objects",
+        "catfile",
+        "tempdir",
+    ]
 
     def __init__(self, workdir: Optional[Path] = None):
-        self.workdir = Path.cwd() if workdir is None else workdir
+        self.tempdir = None
+        self.gitdir, self.workdir = map(
+            Path,
+            run(
+                ["git", "rev-parse", "--git-dir", "--show-toplevel"],
+                stdout=PIPE,
+                cwd=workdir,
+                check=True,
+            )
+            .stdout.decode()
+            .splitlines(),
+        )
 
         # XXX(nika): Does it make more sense to cache these or call every time?
         # Cache for length of time & invalidate?
@@ -146,6 +171,23 @@ class Repository:
             raise IOError("cat-file backend failure")
         except MissingObject:
             pass
+
+    def __enter__(self) -> "Repository":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[Exception],
+        exc_tb: Optional[TracebackType],
+    ):
+        if self.tempdir:
+            self.tempdir.__exit__(exc_type, exc_val, exc_tb)
+
+    def get_tempdir(self) -> Path:
+        if self.tempdir is None:
+            self.tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
+        return Path(self.tempdir.name)
 
     def new_commit(
         self,
