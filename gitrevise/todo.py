@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Set, Optional
 
 from .odb import Commit, Oid, Repository
-from .utils import run_editor, edit_commit_message
+from .utils import run_editor, edit_commit_message, cut_commit
 
 
 class StepKind(Enum):
@@ -11,6 +11,7 @@ class StepKind(Enum):
     FIXUP = "fixup"
     SQUASH = "squash"
     REWORD = "reword"
+    CUT = "cut"
     INDEX = "index"
 
     def __str__(self) -> str:
@@ -26,6 +27,8 @@ class StepKind(Enum):
             return StepKind.SQUASH
         if "reword".startswith(instr):
             return StepKind.REWORD
+        if "cut".startswith(instr):
+            return StepKind.CUT
         if "index".startswith(instr):
             return StepKind.INDEX
         raise ValueError(
@@ -82,6 +85,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
          r, reword <commit> = use commit, but edit the commit message
          f, fixup <commit> = use commit, but fuse changes into previous commit
          s, squash <commit> = like fixup, but also edit the commit message
+         c, cut <commit> = interactively split commit into two smaller commits
          i, index <commit> = leave commit changes unstaged
 
         These lines can be re-ordered; they are executed from top to bottom.
@@ -131,11 +135,13 @@ def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> C
         elif step.kind == StepKind.FIXUP:
             current = current.update(tree=rebased.tree())
         elif step.kind == StepKind.REWORD:
-            current = edit_commit_message(current)
+            current = edit_commit_message(rebased)
         elif step.kind == StepKind.SQUASH:
             fused = current.message + b"\n\n" + rebased.message
             current = current.update(tree=rebased.tree(), message=fused)
             current = edit_commit_message(current)
+        elif step.kind == StepKind.CUT:
+            current = cut_commit(rebased)
         elif step.kind == StepKind.INDEX:
             break
         else:

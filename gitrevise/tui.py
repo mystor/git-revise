@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from .odb import Repository, Commit
-from .utils import commit_range, edit_commit_message, update_head
+from .utils import commit_range, edit_commit_message, update_head, cut_commit
 from .todo import apply_todos, build_todos, edit_todos
 
 __version__ = "0.1"
@@ -57,6 +57,11 @@ def build_parser() -> ArgumentParser:
         action="append",
         help="specify commit message on command line",
     )
+    msg_group.add_argument(
+        "--cut",
+        action="store_true",
+        help="interactively cut a commit into two smaller commits",
+    )
     return parser
 
 
@@ -103,6 +108,10 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     # Rewrite the author to match the current user if requested.
     if args.reauthor:
         current = current.update(author=repo.default_author)
+
+    # If the commit should be cut, prompt the user to perform the cut.
+    if args.cut:
+        current = cut_commit(current)
 
     if current != replaced:
         print(f"{current.oid.short()} {current.summary()}")

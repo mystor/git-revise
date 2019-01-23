@@ -289,9 +289,9 @@ class GitObj:
     def git_type(cls) -> str:
         return cls.__name__.lower()
 
-    def persist(self) -> None:
+    def persist(self) -> Oid:
         if self.persisted:
-            return
+            return self.oid
 
         self.persist_deps()
         new_oid = run(
@@ -312,6 +312,7 @@ class GitObj:
 
         assert Oid.fromhex(new_oid.decode("ascii")) == self.oid
         self.persisted = True
+        return self.oid
 
     def persist_deps(self):
         pass
