@@ -132,7 +132,7 @@ def main(argv):
         # If '-a' was specified, stage all changes.
         if args.all:
             print("Staging all changes")
-            if subprocess.run(["git", "add", "-u"]).returncode != 0:
+            if subprocess.run(["git", "add", "-u"], cwd=repo.workdir).returncode != 0:
                 print("Couldn't stage changes", file=sys.stderr)
                 sys.exit(1)
 

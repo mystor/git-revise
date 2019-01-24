@@ -69,6 +69,7 @@ def edit_commit_message(commit: Commit) -> Commit:
             ["git", "diff-tree", "--stat", base_tree, commit_tree],
             check=True,
             stdout=PIPE,
+            cwd=commit.repo.workdir,
         ).stdout.decode(errors="replace")
     else:
         diff_stat = "<initial commit>"
