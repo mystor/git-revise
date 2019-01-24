@@ -215,7 +215,8 @@ def merge_blobs(
         raise MergeConflict("user aborted")
 
     # Open the editor on the conflicted file.
-    conflicts = tmpdir / "conflicts"
+    conflicts = tmpdir / "conflict" / path.relative_to("/")
+    conflicts.parent.mkdir(parents=True, exist_ok=True)
     conflicts.write_bytes(process.stdout)
     proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
 

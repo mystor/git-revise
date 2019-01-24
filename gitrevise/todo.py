@@ -110,7 +110,10 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
 
         # Produce diagnostics for duplicated commits.
         if step.commit.oid in seen:
-            print(f"(warning) Commit {step.commit} referenced multiple times", file=sys.stderr)
+            print(
+                f"(warning) Commit {step.commit} referenced multiple times",
+                file=sys.stderr,
+            )
         seen.add(step.commit.oid)
 
         if step.kind == StepKind.INDEX:
