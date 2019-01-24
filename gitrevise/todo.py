@@ -1,4 +1,5 @@
 import re
+import sys
 from enum import Enum
 from typing import List, Set, Optional
 
@@ -109,7 +110,7 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
 
         # Produce diagnostics for duplicated commits.
         if step.commit.oid in seen:
-            print(f"(warning) Commit {step.commit} referenced multiple times")
+            print(f"(warning) Commit {step.commit} referenced multiple times", file=sys.stderr)
         seen.add(step.commit.oid)
 
         if step.kind == StepKind.INDEX:
@@ -121,9 +122,9 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     before = set(s.commit.oid for s in todos)
     after = set(s.commit.oid for s in result)
     for oid in before - after:
-        print(f"(warning) commit {oid} missing from todo list")
+        print(f"(warning) commit {oid} missing from todo list", file=sys.stderr)
     for oid in after - before:
-        print(f"(warning) commit {oid} not in original todo list")
+        print(f"(warning) commit {oid} not in original todo list", file=sys.stderr)
 
     return result
 
@@ -151,6 +152,6 @@ def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> C
         if reauthor:
             current = current.update(author=current.repo.default_author)
 
-        print(f"{current.oid.short()} {current.summary()}")
+        print(f"{step.kind.value:6} {current.oid.short()}  {current.summary()}")
 
     return current
