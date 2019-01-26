@@ -99,6 +99,8 @@ html_theme = "sphinx_rtd_theme"
 
 manpages_url = "https://manpages.debian.org/{path}"
 
+html_experimental_html5_writer = False
+
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
