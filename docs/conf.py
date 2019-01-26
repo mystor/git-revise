@@ -97,7 +97,7 @@ html_theme = "sphinx_rtd_theme"
 #
 # html_sidebars = {}
 
-# manpages_url = "https://manpages.debian.org/{path}"
+manpages_url = "https://manpages.debian.org/{path}"
 
 # -- Options for manual page output ------------------------------------------
 
