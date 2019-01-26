@@ -397,8 +397,6 @@ class Commit(GitObj):
                 self.author = Signature.parse(value)
             elif key == b"committer":
                 self.committer = Signature.parse(value)
-            else:
-                raise ValueError("Unknown commit header: " + key.decode())
 
     def tree(self) -> "Tree":
         return self.repo.get_tree(self.tree_oid)
