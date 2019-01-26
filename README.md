@@ -1,6 +1,7 @@
 # git revise
 [![Build Status](https://travis-ci.org/mystor/git-revise.svg?branch=master)](https://travis-ci.org/mystor/git-revise)
-[![PyPi](https://img.shields.io/pypi/v/git-revise.svg)](https://pypi.org/project/git-revise/)
+[![PyPi](https://img.shields.io/pypi/v/git-revise.svg)](https://pypi.org/project/git-revise)
+[![Documentation Status](https://readthedocs.org/projects/git-revise/badge/?version=latest)](https://git-revise.readthedocs.io/en/latest/?badge=latest)
 
 git-revise is a tool to make it easier and faster to perform modifications on
 historical commits within large repositories.
