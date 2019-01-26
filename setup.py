@@ -6,6 +6,7 @@ setup(
     name="git-revise",
     version=gitrevise.__version__,
     packages=find_packages(),
+    python_requires=">=3.6",
     scripts=["git-revise"],
     author="Nika Layzell",
     author_email="nika@thelayzells.com",

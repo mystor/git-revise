@@ -9,7 +9,7 @@ from .odb import Repository, Commit, Tree, Oid
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
     """Oldest-first iterator over the given commit range,
-    not including the commit |base|"""
+    not including the commit ``base``"""
     commits = []
     while tip != base:
         commits.append(tip)
@@ -59,6 +59,9 @@ def run_editor(
 
 
 def edit_commit_message(commit: Commit) -> Commit:
+    """Launch an editor to edit the commit message of ``commit``, returning
+    a modified commit"""
+
     # If the target commit is not the initial commit, produce a diff --stat to
     # include in the commit message comments.
     if len(commit.parents()) == 1:
@@ -109,6 +112,9 @@ def update_head(ref: str, old: Commit, new: Commit, expected: Optional[Tree]):
 
 
 def cut_commit(commit: Commit) -> Commit:
+    """Perform a ``cut`` operation on the given commit, and return the
+    modified commit."""
+
     repo = commit.repo
 
     # Create an environment with an explicit index file.

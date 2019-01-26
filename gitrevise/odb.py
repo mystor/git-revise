@@ -14,11 +14,15 @@ from tempfile import TemporaryDirectory
 
 
 class MissingObject(Exception):
+    """Exception raised when a commit cannot be found in the ODB"""
+
     def __init__(self, ref: str):
         Exception.__init__(self, f"Object {ref} does not exist")
 
 
 class Oid(bytes):
+    """Git object identifier"""
+
     def __new__(cls, b: bytes) -> "Oid":
         if len(b) != 20:
             raise ValueError("Expected 160-bit SHA1 hash")
@@ -26,17 +30,21 @@ class Oid(bytes):
 
     @classmethod
     def fromhex(cls, instr: str) -> "Oid":
+        """Parse an ``Oid`` from a hexadecimal string"""
         return Oid(bytes.fromhex(instr))
 
     @classmethod
     def null(cls) -> "Oid":
+        """An ``Oid`` consisting of entirely 0s"""
         return cls(b"\0" * 20)
 
     def short(self) -> str:
+        """A shortened version of the Oid's hexadecimal form"""
         return str(self)[:12]
 
     @classmethod
     def for_object(cls, tag: str, body: bytes):
+        """Hash an object with the given type tag and body to determine its Oid"""
         hasher = hashlib.sha1()
         hasher.update(
             tag.encode("ascii") + b" " + str(len(body)).encode("ascii") + b"\0" + body
@@ -51,6 +59,8 @@ class Oid(bytes):
 
 
 class Signature:
+    """Git user signature"""
+
     name: bytes
     email: bytes
     timestamp: bytes
@@ -69,6 +79,7 @@ class Signature:
 
     @classmethod
     def parse(cls, spec: bytes) -> "Signature":
+        """Parse a signature from git format"""
         match = cls.sig_re.fullmatch(spec)
         assert match is not None, "Invalid Signature"
 
@@ -86,6 +97,7 @@ class Signature:
         self.offset = offset
 
     def raw(self) -> bytes:
+        """Encode this signature into git format"""
         return (
             self.name + b" <" + self.email + b"> " + self.timestamp + b" " + self.offset
         )
@@ -105,6 +117,8 @@ class Signature:
 
 
 class Repository:
+    """Main entry point for a git repository"""
+
     workdir: Path
     gitdir: Path
     default_author: "Signature"
@@ -185,6 +199,7 @@ class Repository:
             self.tempdir.__exit__(exc_type, exc_val, exc_tb)
 
     def get_tempdir(self) -> Path:
+        """Return a temporary directory to use for modifications to this repository"""
         if self.tempdir is None:
             self.tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
         return Path(self.tempdir.name)
@@ -215,6 +230,10 @@ class Repository:
         return Commit(self, body)
 
     def new_tree(self, entries: Mapping[bytes, "Entry"]) -> "Tree":
+        """Directly create an in-memory tree object, without persisting it.
+        If a tree object with these entries already exists, it will be
+        returned instead."""
+
         def entry_key(pair: Tuple[bytes, Entry]) -> bytes:
             name, entry = pair
             # Directories are sorted in the tree listing as though they have a
@@ -229,14 +248,18 @@ class Repository:
         return Tree(self, body)
 
     def index_tree(self) -> "Tree":
+        """Create a tree object containing the staged state of the git index"""
         written = run(["git", "write-tree"], check=True, stdout=PIPE, cwd=self.workdir)
         oid = Oid.fromhex(written.stdout.rstrip().decode())
         return self.get_tree(oid)
 
     def commit_staged(self, message: bytes = b"<git index>") -> "Commit":
+        """Create an in-memory commit containing the staged state of the git index"""
         return self.new_commit(self.index_tree(), [self.get_commit("HEAD")], message)
 
     def get_obj(self, ref: Union[Oid, str]) -> "GitObj":
+        """Get the identified git object from this repository. If given an
+        :class:`Oid`, the cache will be checked before asking git."""
         if isinstance(ref, Oid):
             cache = self.objects[ref[0]]
             if ref in cache:
@@ -283,18 +306,21 @@ class Repository:
         return obj
 
     def get_commit(self, ref: Union[Oid, str]) -> "Commit":
+        """Like :py:meth:`get_obj`, but returns a :class:`Commit`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Commit):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Commit!")
 
     def get_tree(self, ref: Union[Oid, str]) -> "Tree":
+        """Like :py:meth:`get_obj`, but returns a :class:`Tree`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Tree):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Tree!")
 
     def get_blob(self, ref: Union[Oid, str]) -> "Blob":
+        """Like :py:meth:`get_obj`, but returns a :class:`Blob`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Blob):
             return obj
@@ -305,6 +331,9 @@ GitObjT = TypeVar("GitObjT", bound="GitObj")
 
 
 class GitObj:
+    """In-memory representation of a git object. Instances of this object
+    should be one of :class:`Commit`, :class:`Tree` or :class:`Blob`"""
+
     repo: Repository
     body: bytes
     oid: Oid
@@ -332,6 +361,7 @@ class GitObj:
         return cls.__name__.lower()
 
     def persist(self) -> Oid:
+        """If this object has not been persisted to disk yet, persist it"""
         if self.persisted:
             return self.oid
 
@@ -369,11 +399,22 @@ class GitObj:
 
 
 class Commit(GitObj):
+    """In memory representation of a git ``commit`` object"""
+
     tree_oid: Oid
+    """:class:`Oid` of this commit's ``tree`` object"""
+
     parent_oids: Sequence[Oid]
+    """List of :class:`Oid` for this commit's parents"""
+
     author: Signature
+    """:class:`Signature` of this commit's author"""
+
     committer: Signature
+    """:class:`Signature` of this commit's committer"""
+
     message: bytes
+    """Body of this commit's message"""
 
     __slots__ = ("tree_oid", "parent_oids", "author", "committer", "message")
 
@@ -399,20 +440,28 @@ class Commit(GitObj):
                 self.committer = Signature.parse(value)
 
     def tree(self) -> "Tree":
+        """``tree`` object corresponding to this commit"""
         return self.repo.get_tree(self.tree_oid)
 
     def parents(self) -> Sequence["Commit"]:
+        """List of parent commits"""
         return [self.repo.get_commit(parent) for parent in self.parent_oids]
 
     def parent(self) -> "Commit":
+        """Helper method to get the single parent of a commit. Raises
+        :class:`ValueError` if the incorrect number of parents are
+        present."""
         if len(self.parents()) != 1:
             raise ValueError(f"Commit {self.oid} has {len(self.parents())} parents")
         return self.parents()[0]
 
     def summary(self) -> str:
+        """The summary line (first line) of the commit message"""
         return self.message.split(b"\n", maxsplit=1)[0].decode(errors="replace")
 
     def rebase(self, parent: "Commit") -> "Commit":
+        """Create a new commit with the same changes, except with ``parent``
+        as it's parent."""
         from .merge import rebase
 
         return rebase(self, parent)
@@ -424,6 +473,7 @@ class Commit(GitObj):
         message: Optional[bytes] = None,
         author: Optional[Signature] = None,
     ) -> "Commit":
+        """Create a new commit with specific properties updated or replaced"""
         # Compute parameters used to create the new object.
         if tree is None:
             tree = self.tree()
@@ -447,6 +497,11 @@ class Commit(GitObj):
         return self.repo.new_commit(tree, parents, message, author)
 
     def update_ref(self, ref: str, reason: str, current: Optional[Oid]):
+        """Update the named git reference ``ref`` to point to this commit. An
+        entry with the reason ``reason`` will be added to the reflog.
+
+        If ``current`` is provided, the update will be atomic, and fail if
+        the ref's current value does not match."""
         self.persist()
         args = ["git", "update-ref", "-m", reason, ref, str(self.oid)]
         if current is not None:
@@ -467,20 +522,38 @@ class Commit(GitObj):
 
 
 class Mode(Enum):
+    """Mode for an entry in a ``tree``"""
+
     GITLINK = b"160000"
+    """submodule entry"""
+
     SYMLINK = b"120000"
+    """symlink entry"""
+
     DIR = b"40000"
+    """directory entry"""
+
     REGULAR = b"100644"
+    """regular entry"""
+
     EXEC = b"100755"
+    """executable entry"""
 
     def is_file(self) -> bool:
         return self in (Mode.REGULAR, Mode.EXEC)
 
 
 class Entry:
+    """In memory representation of a single ``tree`` entry"""
+
     repo: Repository
+    """:class:`Repository` this entry originates from"""
+
     mode: Mode
+    """:class:`Mode` of the entry"""
+
     oid: Oid
+    """:class:`Oid` of this entry's object"""
 
     __slots__ = ("repo", "mode", "oid")
 
@@ -490,21 +563,25 @@ class Entry:
         self.oid = oid
 
     def blob(self) -> "Blob":
+        """Get the data for this entry as a :class:`Blob`"""
         if self.mode in (Mode.REGULAR, Mode.EXEC):
             return self.repo.get_blob(self.oid)
         return Blob(self.repo, b"")
 
     def symlink(self) -> bytes:
+        """Get the data for this entry as a symlink"""
         if self.mode == Mode.SYMLINK:
             return self.repo.get_blob(self.oid).body
         return b"<non-symlink>"
 
     def tree(self) -> "Tree":
+        """Get the data for this entry as a :class:`Tree`"""
         if self.mode == Mode.DIR:
             return self.repo.get_tree(self.oid)
         return Tree(self.repo, b"")
 
     def persist(self) -> None:
+        """:py:meth:`GitObj.persist` the git object referenced by this entry"""
         if self.mode != Mode.GITLINK:
             self.repo.get_obj(self.oid).persist()
 
@@ -518,7 +595,10 @@ class Entry:
 
 
 class Tree(GitObj):
+    """In memory representation of a git ``tree`` object"""
+
     entries: Dict[bytes, Entry]
+    """mapping from entry names to entry objects in this tree"""
 
     __slots__ = ("entries",)
 
@@ -541,6 +621,8 @@ class Tree(GitObj):
 
 
 class Blob(GitObj):
+    """In memory representation of a git ``blob`` object"""
+
     __slots__ = ()
 
     def __repr__(self) -> str:
