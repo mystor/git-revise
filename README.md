@@ -17,19 +17,11 @@ index state, performing all merges in-memory, and only writing them when
 necessary. This allows it to be significantly faster on large codebases, and
 avoid invalidating builds.
 
-## Install
+## Documentation
 
-```bash
-$ pip install --user git-revise
-```
+Documentation, including usage and examples, is hosted on [Read the Docs].
 
-## Usage
-
-For detailed documentation, usage, and examples, read the manpage:
- * [`git-revise(1)`](https://git-revise.readthedocs.io/en/latest/man.html).
-
-If using `git-revise` from python, the module is also documented:
- * [The `gitrevise` module](https://git-revise.readthedocs.io/en/latest/api/index.html)
+[Read the Docs]: https://git-revise.readthedocs.io/en/latest
 
 ## Performance
 

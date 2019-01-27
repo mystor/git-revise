@@ -1,0 +1,220 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "GIT-REVISE" "1" "Jan 26, 2019" "0.1" "git-revise"
+.SH NAME
+git-revise \- Efficiently update, split, and rearrange git commits
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.sp
+\fIgit revise\fP [<options>] <target>
+.SH DESCRIPTION
+.sp
+\fBgit revise\fP is a \fBgit(1)\fP subcommand to efficiently
+update, split, and rearrange commits. It is heavily inspired by
+\fBgit\-rebase(1)\fP, however tries to be more efficient and ergonomic for
+patch\-stack oriented workflows.
+.sp
+By default, \fBgit revise\fP will apply staged changes to <target>,
+updating \fBHEAD\fP to point at the revised history. It also supports splitting
+commits, rewording commit messages.
+.sp
+Unlike \fBgit\-rebase(1)\fP, \fBgit revise\fP avoids modifying
+working directory and index state, performing all merges in\-memory, and only
+writing them when necessary. This allows it to be significantly faster on
+large codebases, and avoid invalidating builds.
+.SH OPTIONS
+.SS General options
+.INDENT 0.0
+.TP
+.B \-a, \-\-all
+Stage changes to tracked files before revising.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-no\-index
+Ignore staged changes in the index.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-reauthor
+Reset target commit’s author to the current user.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-ref <gitref>
+Working branch to update; defaults to \fBHEAD\fP\&.
+.UNINDENT
+.SS Main modes of operation
+.INDENT 0.0
+.TP
+.B \-i, \-\-interactive
+Rather than applying staged changes to <target>, edit a to\-do list of
+actions to perform on commits after <target>. See \fI\%INTERACTIVE MODE\fP\&.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-c, \-\-cut
+Interactively select hunks from <target>. The chosen hunks are split into
+a second commit immediately after the target.
+.sp
+After splitting is complete, both commit’s messages are edited.
+.sp
+See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+to operate this mode.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-e, \-\-edit
+After applying staged changes, edit <target>’s commit message.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-m <msg>, \-\-message <msg>
+Use the given <msg> as the new commit message for <target>. If multiple
+\fI\%\-m\fP options are given, their values are concatenated as separate
+paragraphs.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-version
+Print version information and exit.
+.UNINDENT
+.SH CONFLICT RESOLUTION
+.sp
+When a conflict is encountered, \fBgit revise\fP will attempt to resolve
+it automatically using standard git mechanisms. If automatic resolution
+fails, the user will be prompted to resolve them manually.
+.sp
+There is currently no support for using \fBgit\-mergetool(1)\fP to
+resolve conflicts.
+.sp
+No attempt is made to detect renames of files or directories. \fBgit
+revise\fP may produce suboptimal results across renames. Use the interactive
+mode of \fBgit\-rebase(1)\fP when rename tracking is important.
+.SH NOTES
+.sp
+A successful \fBgit revise\fP will add a single entry to the reflog,
+allowing it to be undone with \fBgit reset @{1}\fP\&. Unsuccessful \fBgit
+revise\fP commands will leave your repository largely unmodified.
+.sp
+No marge commits may occur between the target commit and \fBHEAD\fP, as
+rewriting them is not supported.
+.sp
+See \fBgit\-rebase(1)\fP for more information on the implications of
+modifying history on a repository that you share.
+.SH INTERACTIVE MODE
+.sp
+\fBgit revise\fP supports an interactive mode inspired by the
+interactive mode of \fBgit\-rebase(1)\fP\&.
+.sp
+This mode is started with the last commit you want to retain “as\-is”:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+git revise \-i <after\-this\-commit>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+An editor will be fired up with the commits in your current branch after the
+given commit. If the index has any staged but uncommitted changes, a \fB<git
+index>\fP entry will also be present.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+pick 8338dfa88912 Oneline summary of first commit
+pick 735609912343 Summary of second commit
+index 672841329981 <git index>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+These commits may be re\-ordered to change the order they appear in history.
+In addition, the \fBpick\fP and \fBindex\fP commands may be replaced to modify
+their behaviour.
+.INDENT 0.0
+.TP
+.B index
+Do not commit these changes, instead leaving them staged in the index.
+Index lines must come last in the file.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B pick
+Use the given commit as\-is in history. When applied to the generated
+\fBindex\fP entry, the commit will have the message \fB<git index>\fP\&.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B fixup
+Add the commit’s changes into the previous commit, discarding it’s commit
+message.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B squash
+Like fuse, but also open an editor to merge the commit’s messages.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B reword
+Open an eitor to modify the commit message.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B cut
+Interactively select hunks from the commit. The chosen hunks are split
+into a second commit immediately after it.
+.sp
+After splitting is complete, both commit’s messages are edited.
+.sp
+See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+to operate this mode.
+.UNINDENT
+.SH REPORTING BUGS
+.sp
+Please report issues and feature requests to the issue tracker at
+\fI\%https://github.com/mystor/git\-revise/issues\fP\&.
+.sp
+Code, documentation and other contributions are also welcomed.
+.SH SEE ALSO
+.sp
+\fBgit(1)\fP
+\fBgit\-rebase(1)\fP
+\fBgit\-add(1)\fP
+.SH COPYRIGHT
+2018-2019, Nika Layzell
+.\" Generated by docutils manpage writer.
+.

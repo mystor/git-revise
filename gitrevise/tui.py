@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from argparse import ArgumentParser, Namespace
 import subprocess
 import sys
@@ -126,7 +126,7 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
         print(f"(warning) no changes performed", file=sys.stderr)
 
 
-def main(argv):
+def main(argv: Optional[List[str]] = None):
     args = build_parser().parse_args(argv)
     with Repository() as repo:
         # If '-a' was specified, stage all changes.
