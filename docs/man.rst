@@ -15,7 +15,9 @@ DESCRIPTION
 ===========
 
 :program:`git revise` is a :manpage:`git(1)` subcommand to efficiently
-update, split, and rearrange commits.
+update, split, and rearrange commits. It is heavily inspired by
+:manpage:`git-rebase(1)`, however tries to be more efficient and ergonomic for
+patch-stack oriented workflows.
 
 By default, :program:`git revise` will apply staged changes to <target>,
 updating ``HEAD`` to point at the revised history. It also supports splitting

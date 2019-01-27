@@ -3,59 +3,40 @@
 [![PyPi](https://img.shields.io/pypi/v/git-revise.svg)](https://pypi.org/project/git-revise)
 [![Documentation Status](https://readthedocs.org/projects/git-revise/badge/?version=latest)](https://git-revise.readthedocs.io/en/latest/?badge=latest)
 
-git-revise is a tool to make it easier and faster to perform modifications on
-historical commits within large repositories.
 
-> **NOTE** This readme is a bit out-of-date. It will be updated soon with
-> more accorate examples of current usage of this script.
+`git revise` is a `git` subcommand to efficiently update, split, and rearrange
+commits. It is heavily inspired by `git rebase`, however tries to be more
+efficient and ergonomic for patch-stack oriented workflows.
 
-The command `git revise $1` is, in effect, a more efficient version of the
-following common snippet:
+By default, `git revise` will apply staged changes to a target commit,
+updating `HEAD` to point at the revised history. It also supports splitting
+commits, and rewording commit messages.
+
+Unlike `git-rebase`, `git revise` avoids modifying working directory and
+index state, performing all merges in-memory, and only writing them when
+necessary. This allows it to be significantly faster on large codebases, and
+avoid invalidating builds.
+
+## Install
 
 ```bash
-$ TARGET=$(git rev-parse --validate $1)
-$ git commit --fixup=$TARGET
-$ EDITOR=true git rebase -i --autosquash $TARGET^
+$ pip install --user git-revise
 ```
-
-> **NOTE** This hasn't been tested nor reviewed much yet. Use my personal
-> scripts at your own risk :-).
 
 ## Usage
 
-Stage changes, and call git-revise to apply them to a commit
+For detailed documentation, usage, and examples, read the manpage:
+ * [`git-revise(1)`](https://git-revise.readthedocs.io/en/latest/man.html).
 
-```bash
-$ git add ...
-$ git revise HEAD^
-```
-
-With the `-e` and `-m` flags, `git revise` quickly edits commit messages.
-
-```bash
-$ git revise -e HEAD^                # Opens an editor for message
-$ git revise -m "New message" HEAD^  # Takes message from cmdline
-```
-
-### Conflicts
-
-When conflicts occur, `git revise` will attempt to resolve them
-automatically. If it fails, it will either prompt the user for a resolution,
-or start the `kdiff3` tool to resolve the conflict. Other difftools are not
-currently handled.
-
-### Working Directory Changes
-
-`git revise` makes no effort to update the index or working directory after
-applying changes, however it will emit a warning if the final state of the
-repository after the rebase does not match the initial state.
-
-Differences in state should be easy to spot, as the index and working
-directory will still reflect the initial state.
+If using `git-revise` from python, the module is also documented:
+ * [The `gitrevise` module](https://git-revise.readthedocs.io/en/latest/api/index.html)
 
 ## Performance
 
-With large repositories such as mozilla-central, git-revise is often
+> **NOTE**: These numbers are from an earlier version, and may not reflect
+> the current state of `git-revise`.
+
+With large repositories such as mozilla-central, `git-revise` is often
 significantly faster incremental targeted changes, due to not needing to
 update either the index or working directory during rebases.
 
@@ -73,9 +54,7 @@ The following are the commands I ran:
 # Apply changes with git rebase -i --autosquash
 $ git reset 6fceb7da316d && git add .
 $ time bash -c 'TARGET=14f1c85bf60d; git commit --fixup=$TARGET; EDITOR=true git rebase -i --autosquash $TARGET~'
-[mybranch 286c7cff7330] fixup! Bug ...
- 1 file changed, 1 insertion(+)
-Successfully rebased and updated refs/heads/mybranch.
+<snip>
 
 real    0m16.931s
 user    0m15.289s
@@ -84,12 +63,7 @@ sys     0m3.579s
 # Apply changes with git revise
 $ git reset 6fceb7da316d && git add .
 $ time git revise 14f1c85bf60d
-Applying staged changes to '14f1c85bf60d'
-Reparenting commit 1/10: 23a741dff61496ba929d979942e0ab590db1fece
-Reparenting commit 2/10: 8376b15993e506883a54c5d1b75becd083224eb7
 <snip>
-Reparenting commit 10/10: 6fceb7da316dbf4fedb5360ed09bd7b03f28bc6a
-Updating HEAD (6fceb7da316dbf4fedb5360ed09bd7b03f28bc6a => 996ec1a718bad36edab0e7c1129d698d29cdcdfc)
 
 real    0m0.541s
 user    0m0.354s
@@ -113,3 +87,6 @@ sys     0m0.150s
    Currently this algorithm is incapable of handling copy and rename
    operations correctly, instead treating them as file creation and deletion
    actions. This may be resolveable in the future.
+
+4. The working directory is never examined or updated during the rebasing
+   process, avoiding disk I/O and invalidating existing builds.
