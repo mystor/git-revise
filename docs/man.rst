@@ -55,8 +55,22 @@ Main modes of operation
 
 .. option:: -i, --interactive
 
-   Rather than applying staged changes to <target>, edit a to-do list of
+   Rather than applying staged changes to <target>, edit a todo list of
    actions to perform on commits after <target>. See :ref:`interactive-mode`.
+
+.. option:: --autosquash
+
+   Rather than directly applying staged changes to <target>, automatically
+   perform fixup or squash actions marked with ``fixup!`` or ``squash!``
+   between <target> and the current ``HEAD``. For more information on what
+   these actions do, see :ref:`interactive-mode`.
+
+   These commits are usually created with ``git commit --fixup=<commit>`` or
+   ``git commit --squash=<commit>``, and identify the target with the first
+   line of its commit message.
+
+   This option can be combined with :option:`--interactive` to modify the
+   generated todos before they're executed.
 
 .. option:: -c, --cut
 
