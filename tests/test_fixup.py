@@ -1,7 +1,6 @@
 # pylint: skip-file
 
 from io import StringIO
-from gitrevise.odb import Commit
 from gitrevise.tui import main
 
 
@@ -144,3 +143,42 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
         new = repo.get_commit("HEAD~")
         assert new.persisted
         assert new != old
+
+
+def test_autosquash_nonhead(repo, bash):
+    bash(
+        """
+        echo "hello, world" > file1
+        git add file1
+        git commit -m "commit one"
+
+        echo "second file" > file2
+        git add file2
+        git commit -m "commit two"
+
+        echo "new line!" >> file1
+        git add file1
+        git commit -m "commit three"
+
+        echo "extra line" >> file2
+        git add file2
+        git commit --fixup=HEAD~
+        """
+    )
+
+    old = repo.get_commit("HEAD~~")
+    assert old.persisted
+
+    main(["--autosquash", str(old.parent().oid)])
+
+    new = repo.get_commit("HEAD~")
+    assert old != new, "commit was modified"
+    assert old.parents() == new.parents(), "parents are unchanged"
+
+    assert old.tree() != new.tree(), "tree is changed"
+
+    assert new.message == old.message, "message should not be changed"
+
+    assert new.persisted, "commit persisted to disk"
+    assert new.author == old.author, "author is unchanged"
+    assert new.committer == repo.default_committer, "committer is updated"

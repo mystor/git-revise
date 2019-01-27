@@ -72,6 +72,36 @@ def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
     return steps
 
 
+def autosquash_todos(todos: List[Step]) -> List[Step]:
+    new_todos = todos[:]
+
+    for step in reversed(todos):
+        # Check if this is a fixup! or squash! commit, and ignore it otherwise.
+        summary = step.commit.summary()
+        if summary.startswith("fixup! "):
+            kind = StepKind.FIXUP
+        elif summary.startswith("squash! "):
+            kind = StepKind.SQUASH
+        else:
+            continue
+
+        # Locate a matching commit
+        found = None
+        needle = summary.split(maxsplit=1)[1]
+        for idx, target in enumerate(new_todos):
+            if target.commit.summary().startswith(needle):
+                found = idx
+                break
+
+        if found is not None:
+            # Insert a new `fixup` or `squash` step in the correct place.
+            new_todos.insert(found + 1, Step(kind, step.commit))
+            # Remove the existing step.
+            new_todos.remove(step)
+
+    return new_todos
+
+
 def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
     # Invoke the editors to parse commit messages.
     todos_text = "\n".join(str(step) for step in todos).encode()

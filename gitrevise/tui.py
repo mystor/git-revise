@@ -5,7 +5,7 @@ import sys
 
 from .odb import Repository, Commit
 from .utils import commit_range, edit_commit_message, update_head, cut_commit
-from .todo import apply_todos, build_todos, edit_todos
+from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
 
 __version__ = "0.1"
 
@@ -24,6 +24,11 @@ def build_parser() -> ArgumentParser:
         help="reset the author of the targeted commit",
     )
     parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--autosquash",
+        action="store_true",
+        help="Automatically apply fixup! and squash! commits to their targets",
+    )
 
     index_group = parser.add_mutually_exclusive_group()
     index_group.add_argument(
@@ -38,27 +43,28 @@ def build_parser() -> ArgumentParser:
         help="stage all tracked files before running",
     )
 
-    msg_group = parser.add_mutually_exclusive_group()
-    msg_group.add_argument(
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--interactive",
         "-i",
         action="store_true",
         help="interactively edit commit stack",
     )
-    msg_group.add_argument(
+    mode_group.add_argument(
         "--edit",
         "-e",
         action="store_true",
         help="edit commit message of targeted commit",
     )
-    msg_group.add_argument(
+    mode_group.add_argument(
         "--message",
         "-m",
         action="append",
         help="specify commit message on command line",
     )
-    msg_group.add_argument(
+    mode_group.add_argument(
         "--cut",
+        "-c",
         action="store_true",
         help="interactively cut a commit into two smaller commits",
     )
@@ -71,9 +77,15 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     to_rebase = commit_range(target, head)
 
     # Build up an initial todos list, edit that todos list.
-    current = build_todos(to_rebase, staged)
-    todos = edit_todos(repo, current)
-    if current == todos:
+    todos = original = build_todos(to_rebase, staged)
+
+    if args.autosquash:
+        todos = autosquash_todos(todos)
+
+    if args.interactive:
+        todos = edit_todos(repo, todos)
+
+    if original == todos:
         print("(warning) no changes performed", file=sys.stderr)
         return
 
@@ -142,7 +154,7 @@ def main(argv: Optional[List[str]] = None):
             staged = None  # No changes, ignore the commit
 
         # Either enter the interactive or non-interactive codepath.
-        if args.interactive:
+        if args.interactive or args.autosquash:
             interactive(args, repo, staged)
         else:
             noninteractive(args, repo, staged)
