@@ -17,6 +17,12 @@ index state, performing all merges in-memory, and only writing them when
 necessary. This allows it to be significantly faster on large codebases, and
 avoid invalidating builds.
 
+## Install
+
+```sh
+$ pip install --user git-revise
+```
+
 ## Documentation
 
 Documentation, including usage and examples, is hosted on [Read the Docs].
