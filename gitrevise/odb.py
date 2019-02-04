@@ -686,7 +686,7 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
     name: str
     """Git reference name, e.g. 'HEAD' or 'refs/heads/master'"""
 
-    target: GitObjT
+    target: Optional[GitObjT]
     """Referenced git object"""
 
     repo: Repository
@@ -704,30 +704,26 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
         self.refresh()
 
     def refresh(self):
-        obj = self.repo.get_obj(self.name)
-        if isinstance(obj, self._type):
-            self.target = obj
-            return
+        """Re-read the target of this reference from disk"""
+        try:
+            obj = self.repo.get_obj(self.name)
 
-        raise ValueError(
-            f"{type(obj).__name__} {self.name} is not a {self._type.__name__}!"
-        )
+            if not isinstance(obj, self._type):
+                raise ValueError(
+                    f"{type(obj).__name__} {self.name} is not a {self._type.__name__}!"
+                )
+
+            self.target = obj
+        except MissingObject:
+            self.target = None
 
     def update(self, new: GitObjT, reason: str):
         """Update this refreence to point to a new object.
         An entry with the reason ``reason`` will be added to the reflog."""
         new.persist()
-        run(
-            [
-                "git",
-                "update-ref",
-                "-m",
-                reason,
-                self.name,
-                str(new.oid),
-                str(self.target.oid),
-            ],
-            check=True,
-            cwd=self.target.repo.workdir,
-        )
+        args = ["git", "update-ref", "-m", reason, self.name, str(new.oid)]
+        if self.target is not None:
+            args.append(str(self.target.oid))
+
+        run(args, check=True, cwd=self.repo.workdir)
         self.target = new
