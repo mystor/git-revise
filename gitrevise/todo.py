@@ -33,7 +33,7 @@ class StepKind(Enum):
         if "index".startswith(instr):
             return StepKind.INDEX
         raise ValueError(
-            f"step kind '{instr}' must be one of: pick, fixup, reword, or index"
+            f"step kind '{instr}' must be one of: pick, fixup, squash, reword, cut, or index"
         )
 
 

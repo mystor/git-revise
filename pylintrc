@@ -6,5 +6,6 @@ disable=
     too-many-arguments,
     too-many-branches,
     too-many-return-statements,
+    too-few-public-methods,
     cyclic-import,
     fixme

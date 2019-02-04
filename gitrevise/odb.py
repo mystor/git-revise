@@ -23,6 +23,8 @@ class MissingObject(Exception):
 class Oid(bytes):
     """Git object identifier"""
 
+    __slots__ = ()
+
     def __new__(cls, b: bytes) -> "Oid":
         if len(b) != 20:
             raise ValueError("Expected 160-bit SHA1 hash")
@@ -62,9 +64,16 @@ class Signature:
     """Git user signature"""
 
     name: bytes
+    """user name"""
+
     email: bytes
+    """user email"""
+
     timestamp: bytes
+    """unix timestamp"""
+
     offset: bytes
+    """timezone offset from UTC"""
 
     __slots__ = ("name", "email", "timestamp", "offset")
 
@@ -120,25 +129,33 @@ class Repository:
     """Main entry point for a git repository"""
 
     workdir: Path
+    """working directory for this repository"""
+
     gitdir: Path
-    default_author: "Signature"
-    default_committer: "Signature"
-    objects: Dict[int, Dict[Oid, "GitObj"]]
-    catfile: Popen
-    tempdir: Optional[TemporaryDirectory]
+    """.git directory for this repository"""
+
+    default_author: Signature
+    """author used by default for new commits"""
+
+    default_committer: Signature
+    """committer used by default for new commits"""
+
+    _objects: Dict[int, Dict[Oid, "GitObj"]]
+    _catfile: Popen
+    _tempdir: Optional[TemporaryDirectory]
 
     __slots__ = [
         "workdir",
         "gitdir",
         "default_author",
         "default_committer",
-        "objects",
-        "catfile",
-        "tempdir",
+        "_objects",
+        "_catfile",
+        "_tempdir",
     ]
 
     def __init__(self, workdir: Optional[Path] = None):
-        self.tempdir = None
+        self._tempdir = None
         self.gitdir, self.workdir = map(
             Path,
             run(
@@ -170,14 +187,14 @@ class Repository:
             ).stdout.rstrip()
         )
 
-        self.catfile = Popen(
+        self._catfile = Popen(
             ["git", "cat-file", "--batch"],
             bufsize=-1,
             stdin=PIPE,
             stdout=PIPE,
             cwd=self.workdir,
         )
-        self.objects = defaultdict(dict)
+        self._objects = defaultdict(dict)
 
         # Check that cat-file works OK
         try:
@@ -195,14 +212,14 @@ class Repository:
         exc_val: Optional[Exception],
         exc_tb: Optional[TracebackType],
     ):
-        if self.tempdir:
-            self.tempdir.__exit__(exc_type, exc_val, exc_tb)
+        if self._tempdir:
+            self._tempdir.__exit__(exc_type, exc_val, exc_tb)
 
     def get_tempdir(self) -> Path:
         """Return a temporary directory to use for modifications to this repository"""
-        if self.tempdir is None:
-            self.tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
-        return Path(self.tempdir.name)
+        if self._tempdir is None:
+            self._tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
+        return Path(self._tempdir.name)
 
     def new_commit(
         self,
@@ -261,22 +278,22 @@ class Repository:
         """Get the identified git object from this repository. If given an
         :class:`Oid`, the cache will be checked before asking git."""
         if isinstance(ref, Oid):
-            cache = self.objects[ref[0]]
+            cache = self._objects[ref[0]]
             if ref in cache:
                 return cache[ref]
             ref = ref.hex()
 
         # Write out an object descriptor.
-        self.catfile.stdin.write(ref.encode("ascii") + b"\n")
-        self.catfile.stdin.flush()
+        self._catfile.stdin.write(ref.encode("ascii") + b"\n")
+        self._catfile.stdin.flush()
 
         # Read in the response.
-        resp = self.catfile.stdout.readline().decode("ascii")
+        resp = self._catfile.stdout.readline().decode("ascii")
         if resp.endswith("missing\n"):
             # If we have an abbreviated hash, check for in-memory commits.
             try:
                 abbrev = bytes.fromhex(ref)
-                for oid, obj in self.objects[abbrev[0]].items():
+                for oid, obj in self._objects[abbrev[0]].items():
                     if oid.startswith(abbrev):
                         return obj
             except (ValueError, IndexError):
@@ -287,7 +304,7 @@ class Repository:
 
         parts = resp.rsplit(maxsplit=2)
         oid, kind, size = Oid.fromhex(parts[0]), parts[1], int(parts[2])
-        body = self.catfile.stdout.read(size + 1)[:-1]
+        body = self._catfile.stdout.read(size + 1)[:-1]
         assert size == len(body), "bad size?"
 
         # Create a corresponding git object. This will re-use the item in the
@@ -335,15 +352,22 @@ class GitObj:
     should be one of :class:`Commit`, :class:`Tree` or :class:`Blob`"""
 
     repo: Repository
+    """:class:`Repository` object is associated with"""
+
     body: bytes
+    """Raw body of object in bytes"""
+
     oid: Oid
+    """:class:`Oid` of this git object"""
+
     persisted: bool
+    """If ``True``, the object has been persisted to disk"""
 
     __slots__ = ("repo", "body", "oid", "persisted")
 
     def __new__(cls, repo: Repository, body: bytes):
-        oid = Oid.for_object(cls.git_type(), body)
-        cache = repo.objects[oid[0]]
+        oid = Oid.for_object(cls._git_type(), body)
+        cache = repo._objects[oid[0]]  # pylint: disable=protected-access
         if oid in cache:
             return cache[oid]
 
@@ -353,11 +377,11 @@ class GitObj:
         self.oid = oid
         self.persisted = False
         cache[oid] = self
-        self.parse_body()
+        self._parse_body()  # pylint: disable=protected-access
         return self
 
     @classmethod
-    def git_type(cls) -> str:
+    def _git_type(cls) -> str:
         return cls.__name__.lower()
 
     def persist(self) -> Oid:
@@ -365,14 +389,14 @@ class GitObj:
         if self.persisted:
             return self.oid
 
-        self.persist_deps()
+        self._persist_deps()
         new_oid = run(
             [
                 "git",
                 "hash-object",
                 "--no-filters",
                 "-t",
-                self.git_type(),
+                self._git_type(),
                 "-w",
                 "--stdin",
             ],
@@ -386,10 +410,10 @@ class GitObj:
         self.persisted = True
         return self.oid
 
-    def persist_deps(self):
+    def _persist_deps(self):
         pass
 
-    def parse_body(self):
+    def _parse_body(self):
         pass
 
     def __eq__(self, other: object) -> bool:
@@ -418,7 +442,7 @@ class Commit(GitObj):
 
     __slots__ = ("tree_oid", "parent_oids", "author", "committer", "message")
 
-    def parse_body(self):
+    def _parse_body(self):
         # Split the header from the core commit message.
         hdrs, self.message = self.body.split(b"\n\n", maxsplit=1)
 
@@ -508,7 +532,7 @@ class Commit(GitObj):
             args.append(str(current))
         run(args, check=True, cwd=self.repo.workdir)
 
-    def persist_deps(self) -> None:
+    def _persist_deps(self) -> None:
         self.tree().persist()
         for parent in self.parents():
             parent.persist()
@@ -602,7 +626,7 @@ class Tree(GitObj):
 
     __slots__ = ("entries",)
 
-    def parse_body(self):
+    def _parse_body(self):
         self.entries = {}
         rest = self.body
         while rest:
@@ -612,7 +636,7 @@ class Tree(GitObj):
             rest = rest[20:]
             self.entries[name] = Entry(self.repo, Mode(mode), entry_oid)
 
-    def persist_deps(self) -> None:
+    def _persist_deps(self) -> None:
         for entry in self.entries.values():
             entry.persist()
 
@@ -627,3 +651,45 @@ class Blob(GitObj):
 
     def __repr__(self) -> str:
         return f"<Blob {self.oid} ({len(self.body)} bytes)>"
+
+
+class Reference:
+    """A git reference"""
+
+    name: str
+    """Git reference name, e.g. 'HEAD' or 'refs/heads/master'"""
+
+    target: GitObj
+    """Referenced git object"""
+
+    repo: Repository
+    """Repository reference is attached to"""
+
+    __slots__ = ("name", "target", "repo")
+
+    def __init__(self, repo: Repository, name: str):
+        self.name = name
+        self.repo = repo
+        self.refresh()
+
+    def refresh(self):
+        self.target = self.repo.get_obj(self.name)
+
+    def update(self, new: GitObj, reason: str):
+        """Update this refreence to point to a new object.
+        An entry with the reason ``reason`` will be added to the reflog."""
+        new.persist()
+        run(
+            [
+                "git",
+                "update-ref",
+                "-m",
+                reason,
+                self.name,
+                str(new.oid),
+                str(self.target.oid),
+            ],
+            check=True,
+            cwd=self.target.repo.workdir,
+        )
+        self.target = new
