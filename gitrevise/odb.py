@@ -4,7 +4,18 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import hashlib
 import re
-from typing import TypeVar, Type, Dict, Union, Sequence, Optional, Mapping, Tuple, cast
+from typing import (
+    TypeVar,
+    Type,
+    Dict,
+    Union,
+    Sequence,
+    Optional,
+    Mapping,
+    Generic,
+    Tuple,
+    cast,
+)
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
@@ -343,6 +354,22 @@ class Repository:
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Blob!")
 
+    def get_obj_ref(self, ref: str) -> "Reference[GitObj]":
+        """Get a :class:`Reference` to a :class:`GitObj`"""
+        return Reference(GitObj, self, ref)
+
+    def get_commit_ref(self, ref: str) -> "Reference[Commit]":
+        """Get a :class:`Reference` to a :class:`Commit`"""
+        return Reference(Commit, self, ref)
+
+    def get_tree_ref(self, ref: str) -> "Reference[Tree]":
+        """Get a :class:`Reference` to a :class:`Tree`"""
+        return Reference(Tree, self, ref)
+
+    def get_blob_ref(self, ref: str) -> "Reference[Blob]":
+        """Get a :class:`Reference` to a :class:`Blob`"""
+        return Reference(Blob, self, ref)
+
 
 GitObjT = TypeVar("GitObjT", bound="GitObj")
 
@@ -653,29 +680,40 @@ class Blob(GitObj):
         return f"<Blob {self.oid} ({len(self.body)} bytes)>"
 
 
-class Reference:
+class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
     """A git reference"""
 
     name: str
     """Git reference name, e.g. 'HEAD' or 'refs/heads/master'"""
 
-    target: GitObj
+    target: GitObjT
     """Referenced git object"""
 
     repo: Repository
     """Repository reference is attached to"""
 
-    __slots__ = ("name", "target", "repo")
+    _type: Type[GitObjT]
 
-    def __init__(self, repo: Repository, name: str):
+    # FIXME: On python 3.6, pylint doesn't know what to do with __slots__ here.
+    # __slots__ = ("name", "target", "repo", "_type")
+
+    def __init__(self, obj_type: Type[GitObjT], repo: Repository, name: str):
+        self._type = obj_type
         self.name = name
         self.repo = repo
         self.refresh()
 
     def refresh(self):
-        self.target = self.repo.get_obj(self.name)
+        obj = self.repo.get_obj(self.name)
+        if isinstance(obj, self._type):
+            self.target = obj
+            return
 
-    def update(self, new: GitObj, reason: str):
+        raise ValueError(
+            f"{type(obj).__name__} {self.name} is not a {self._type.__name__}!"
+        )
+
+    def update(self, new: GitObjT, reason: str):
         """Update this refreence to point to a new object.
         An entry with the reason ``reason`` will be added to the reflog."""
         new.persist()
