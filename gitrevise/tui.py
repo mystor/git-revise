@@ -72,9 +72,12 @@ def build_parser() -> ArgumentParser:
 
 
 def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    head = repo.get_commit(args.ref)
+    head = repo.get_commit_ref(args.ref)
+    if head.target is None:
+        raise ValueError("Invalid target reference")
+
     target = repo.get_commit(args.target)
-    to_rebase = commit_range(target, head)
+    to_rebase = commit_range(target, head.target)
 
     # Build up an initial todos list, edit that todos list.
     todos = original = build_todos(to_rebase, staged)
@@ -93,20 +96,23 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     new_head = apply_todos(target, todos, reauthor=args.reauthor)
 
     # Update the value of HEAD to the new state.
-    update_head(args.ref, head, new_head, None)
+    update_head(head, new_head, None)
 
 
 def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    head = repo.get_commit(args.ref)
+    head = repo.get_commit_ref(args.ref)
+    if head.target is None:
+        raise ValueError("Invalid target reference")
+
     current = replaced = repo.get_commit(args.target)
-    to_rebase = commit_range(current, head)
+    to_rebase = commit_range(current, head.target)
 
     # Apply changes to the target commit.
-    final = head.tree()
+    final = head.target.tree()
     if staged:
         print(f"Applying staged changes to '{args.target}'")
         current = current.update(tree=staged.rebase(current).tree())
-        final = staged.rebase(head).tree()
+        final = staged.rebase(head.target).tree()
 
     # Update the commit message on the target commit if requested.
     if args.message:
@@ -133,7 +139,7 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
             current = commit.rebase(current)
             print(f"{current.oid.short()} {current.summary()}")
 
-        update_head(args.ref, head, current, final)
+        update_head(head, current, final)
     else:
         print(f"(warning) no changes performed", file=sys.stderr)
 

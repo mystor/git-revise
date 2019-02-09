@@ -4,7 +4,7 @@ import textwrap
 import sys
 import os
 
-from .odb import Repository, Commit, Tree, Oid
+from .odb import Repository, Commit, Tree, Oid, Reference
 
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
@@ -93,10 +93,11 @@ def edit_commit_message(commit: Commit) -> Commit:
     return commit.update(message=message)
 
 
-def update_head(ref: str, old: Commit, new: Commit, expected: Optional[Tree]):
+def update_head(ref: Reference[Commit], new: Commit, expected: Optional[Tree]):
     # Update the HEAD commit to point to the new value.
-    print(f"Updating {ref} ({old.oid} => {new.oid})")
-    new.update_ref(ref, "git-revise rewrite", old.oid)
+    target_oid = ref.target.oid if ref.target else Oid.null()
+    print(f"Updating {ref.name} ({target_oid} => {new.oid})")
+    ref.update(new, "git-revise rewrite")
 
     # We expect our tree to match the tree we started with (including index
     # changes). If it does not, print out a warning.
