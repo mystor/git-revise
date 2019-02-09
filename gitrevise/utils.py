@@ -81,14 +81,11 @@ def edit_commit_message(commit: Commit) -> Commit:
         commit.repo,
         "COMMIT_EDITMSG",
         commit.message,
-        comments=textwrap.dedent(
-            """\
-            Please enter the commit message for your changes. Lines starting
-            with '#' will be ignored, and an empty message aborts the commit.
-
-            """
-        )
-        + diff_stat,
+        comments='\n'.join([
+            "Please enter the commit message for your changes. Lines starting",
+            "with '#' will be ignored, and an empty message aborts the commit.\n",
+            diff_stat,
+        ])
     )
     return commit.update(message=message)
 

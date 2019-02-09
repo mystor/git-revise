@@ -547,18 +547,6 @@ class Commit(GitObj):
             return self
         return self.repo.new_commit(tree, parents, message, author)
 
-    def update_ref(self, ref: str, reason: str, current: Optional[Oid]):
-        """Update the named git reference ``ref`` to point to this commit. An
-        entry with the reason ``reason`` will be added to the reflog.
-
-        If ``current`` is provided, the update will be atomic, and fail if
-        the ref's current value does not match."""
-        self.persist()
-        args = ["git", "update-ref", "-m", reason, ref, str(self.oid)]
-        if current is not None:
-            args.append(str(current))
-        run(args, check=True, cwd=self.repo.workdir)
-
     def _persist_deps(self) -> None:
         self.tree().persist()
         for parent in self.parents():
