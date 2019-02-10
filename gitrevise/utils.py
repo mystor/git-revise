@@ -1,10 +1,16 @@
 from typing import List, Optional
-from subprocess import run
+from subprocess import run, CalledProcessError
+from pathlib import Path
 import textwrap
 import sys
 import os
+import shlex
 
 from .odb import Repository, Commit, Tree, Oid, Reference
+
+
+class EditorError(Exception):
+    pass
 
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
@@ -16,6 +22,30 @@ def commit_range(base: Commit, tip: Commit) -> List[Commit]:
         tip = tip.parent()
     commits.reverse()
     return commits
+
+
+def edit_file(path: Path) -> bytes:
+    try:
+        run(
+            ["bash", "-c", f"exec $(git var GIT_EDITOR) {shlex.quote(path.name)}"],
+            check=True,
+            cwd=path.parent,
+        )
+    except CalledProcessError as err:
+        raise EditorError(f"Editor exited with status {err}")
+    return path.read_bytes()
+
+
+def strip_comments(data: bytes) -> bytes:
+    lines = b""
+    for line in data.splitlines(keepends=True):
+        if not line.startswith(b"#"):
+            lines += line
+
+    lines = lines.rstrip()
+    if lines != b"":
+        lines += b"\n"
+    return lines
 
 
 def run_editor(
@@ -37,24 +67,13 @@ def run_editor(
                 handle.write(b"# " + comment.encode("utf-8") + b"\n")
 
     # Invoke the editor
-    proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{path}'"])
-    if proc.returncode != 0:
-        print("editor exited with a non-zero exit code", file=sys.stderr)
-        sys.exit(1)
+    data = edit_file(path)
+    if comments:
+        data = strip_comments(data)
 
-    # Read in all lines from the edited file.
-    lines = []
-    with open(path, "rb") as handle:
-        for line in handle.readlines():
-            if comments and line.startswith(b"#"):
-                continue
-            lines.append(line)
-
-    # Concatenate parsed lines, stripping trailing newlines.
-    data = b"".join(lines).rstrip() + b"\n"
-    if data == b"\n" and not allow_empty:
-        print("empty file - aborting", file=sys.stderr)
-        sys.exit(1)
+    # Produce an error if the file was empty
+    if not (allow_empty or data):
+        raise EditorError("empty file - aborting")
     return data
 
 

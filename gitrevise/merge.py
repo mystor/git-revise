@@ -12,9 +12,10 @@ unmodified trees and blobs when possible.
 
 from typing import Optional, Tuple, TypeVar
 from pathlib import Path
-from subprocess import run, CalledProcessError
+from subprocess import CalledProcessError
 
 from .odb import Tree, Blob, Commit, Entry, Mode
+from .utils import edit_file
 
 
 T = TypeVar("T")  # pylint: disable=C0103
@@ -208,13 +209,9 @@ def merge_blobs(
         conflicts = tmpdir / "conflict" / path.relative_to("/")
         conflicts.parent.mkdir(parents=True, exist_ok=True)
         conflicts.write_bytes(err.output)
-        proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
+        merged = edit_file(conflicts)
 
-        # Print notes about the merge if errors were found
-        merged = conflicts.read_bytes()
-        if proc.returncode != 0:
-            print(f"(note) editor exited with status {proc.returncode}")
-
+        # Print warnings if the merge looks like it may have failed.
         if merged == err.output:
             print("(note) conflicted file is unchanged")
 
