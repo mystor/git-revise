@@ -165,38 +165,16 @@ class Repository:
         "_tempdir",
     ]
 
-    def __init__(self, workdir: Optional[Path] = None):
+    def __init__(self, cwd: Optional[Path] = None):
         self._tempdir = None
-        self.gitdir, self.workdir = map(
-            Path,
-            run(
-                ["git", "rev-parse", "--git-dir", "--show-toplevel"],
-                stdout=PIPE,
-                cwd=workdir,
-                check=True,
-            )
-            .stdout.decode()
-            .splitlines(),
-        )
+
+        self.workdir = Path(self.git("rev-parse", "--show-toplevel", cwd=cwd).decode())
+        self.gitdir = Path(self.git("rev-parse", "--git-dir").decode())
 
         # XXX(nika): Does it make more sense to cache these or call every time?
         # Cache for length of time & invalidate?
-        self.default_author = Signature.parse(
-            run(
-                ["git", "var", "GIT_AUTHOR_IDENT"],
-                stdout=PIPE,
-                cwd=self.workdir,
-                check=True,
-            ).stdout.rstrip()
-        )
-        self.default_committer = Signature.parse(
-            run(
-                ["git", "var", "GIT_COMMITTER_IDENT"],
-                stdout=PIPE,
-                cwd=self.workdir,
-                check=True,
-            ).stdout.rstrip()
-        )
+        self.default_author = Signature.parse(self.git("var", "GIT_AUTHOR_IDENT"))
+        self.default_committer = Signature.parse(self.git("var", "GIT_COMMITTER_IDENT"))
 
         self._catfile = Popen(
             ["git", "cat-file", "--batch"],
@@ -213,6 +191,24 @@ class Repository:
             raise IOError("cat-file backend failure")
         except MissingObject:
             pass
+
+    def git(
+        self,
+        *cmd: str,
+        cwd: Optional[Path] = None,
+        stdin: Optional[bytes] = None,
+        newline: bool = True,
+        env: Dict[str, str] = None,
+    ) -> bytes:
+        if cwd is None:
+            cwd = getattr(self, "workdir", None)
+
+        cmd = ("git",) + cmd
+        prog = run(cmd, stdout=PIPE, cwd=cwd, env=env, input=stdin, check=True)
+
+        if newline and prog.stdout.endswith(b"\n"):
+            return prog.stdout[:-1]
+        return prog.stdout
 
     def __enter__(self) -> "Repository":
         return self
@@ -277,8 +273,7 @@ class Repository:
 
     def index_tree(self) -> "Tree":
         """Create a tree object containing the staged state of the git index"""
-        written = run(["git", "write-tree"], check=True, stdout=PIPE, cwd=self.workdir)
-        oid = Oid.fromhex(written.stdout.rstrip().decode())
+        oid = Oid.fromhex(self.git("write-tree").decode())
         return self.get_tree(oid)
 
     def commit_staged(self, message: bytes = b"<git index>") -> "Commit":
@@ -417,21 +412,15 @@ class GitObj:
             return self.oid
 
         self._persist_deps()
-        new_oid = run(
-            [
-                "git",
-                "hash-object",
-                "--no-filters",
-                "-t",
-                self._git_type(),
-                "-w",
-                "--stdin",
-            ],
-            input=self.body,
-            stdout=PIPE,
-            cwd=self.repo.workdir,
-            check=True,
-        ).stdout.rstrip()
+        new_oid = self.repo.git(
+            "hash-object",
+            "--no-filters",
+            "-t",
+            self._git_type(),
+            "-w",
+            "--stdin",
+            stdin=self.body,
+        )
 
         assert Oid.fromhex(new_oid.decode("ascii")) == self.oid
         self.persisted = True
@@ -709,9 +698,9 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
         """Update this refreence to point to a new object.
         An entry with the reason ``reason`` will be added to the reflog."""
         new.persist()
-        args = ["git", "update-ref", "-m", reason, self.name, str(new.oid)]
+        args = ["update-ref", "-m", reason, self.name, str(new.oid)]
         if self.target is not None:
             args.append(str(self.target.oid))
 
-        run(args, check=True, cwd=self.repo.workdir)
+        self.repo.git(*args)
         self.target = new

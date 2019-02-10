@@ -12,7 +12,7 @@ unmodified trees and blobs when possible.
 
 from typing import Optional, Tuple, TypeVar
 from pathlib import Path
-from subprocess import run, PIPE
+from subprocess import run, CalledProcessError
 
 from .odb import Tree, Blob, Commit, Entry, Mode
 
@@ -171,63 +171,58 @@ def merge_blobs(
     base: Optional[Blob],
     other: Blob,
 ) -> Blob:
-    tmpdir = current.repo.get_tempdir()
+    repo = current.repo
+
+    tmpdir = repo.get_tempdir()
     (tmpdir / "current").write_bytes(current.body)
     (tmpdir / "base").write_bytes(base.body if base else b"")
     (tmpdir / "other").write_bytes(other.body)
 
-    current_lbl = f"{path} ({labels[0]})"
-    base_lbl = f"{path} ({labels[1]})"
-    other_lbl = f"{path} ({labels[2]})"
-
     # Try running git merge-file to automatically resolve conflicts.
-    process = run(
-        [
-            "git",
+    try:
+        merged = repo.git(
             "merge-file",
             "-q",
             "-p",
-            "-L",
-            current_lbl,
-            "-L",
-            base_lbl,
-            "-L",
-            other_lbl,
-            tmpdir / "current",
-            tmpdir / "base",
-            tmpdir / "other",
-        ],
-        stdout=PIPE,
-        cwd=current.repo.workdir,
-    )
+            f"-L{path} ({labels[0]})",
+            f"-L{path} ({labels[1]})",
+            f"-L{path} ({labels[2]})",
+            str(tmpdir / "current"),
+            str(tmpdir / "base"),
+            str(tmpdir / "other"),
+        )
+    except CalledProcessError as err:
+        # The return code is the # of conflicts if there are conflicts, and
+        # negative if there is an error.
+        if err.returncode < 0:
+            raise
 
-    # The return code of git merge-file is '0' if there were no conflicts,
-    # negative if there was an error, and the positive number of conficts
-    # if there were conflicts.
-    if process.returncode == 0:
-        return Blob(current.repo, process.stdout)
-    if process.returncode < 0:
-        raise MergeConflict("git merge-file errored")
+        # At this point, we know that there are merge conflicts to resolve.
+        # Prompt to try and trigger manual resolution.
+        print(f"Merge conflict for '{path}'")
+        if input("  Edit conflicted file? (Y/n) ").lower() == "n":
+            raise MergeConflict("user aborted")
 
-    # There was a merge conflict.
-    print(f"Merge conflict for '{path}'")
-    if input("  Edit conflicted file? (Y/n) ").lower() == "n":
-        raise MergeConflict("user aborted")
+        # Open the editor on the conflicted file. We ensure the relative path
+        # matches the path of the original file for a better editor experience.
+        conflicts = tmpdir / "conflict" / path.relative_to("/")
+        conflicts.parent.mkdir(parents=True, exist_ok=True)
+        conflicts.write_bytes(err.output)
+        proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
 
-    # Open the editor on the conflicted file.
-    conflicts = tmpdir / "conflict" / path.relative_to("/")
-    conflicts.parent.mkdir(parents=True, exist_ok=True)
-    conflicts.write_bytes(process.stdout)
-    proc = run(["bash", "-c", f"exec $(git var GIT_EDITOR) '{conflicts}'"])
+        # Print notes about the merge if errors were found
+        merged = conflicts.read_bytes()
+        if proc.returncode != 0:
+            print(f"(note) editor exited with status {proc.returncode}")
 
-    # Print notes about the merge if errors were found
-    merged = conflicts.read_bytes()
-    if proc.returncode != 0:
-        print(f"(note) editor exited with status code {proc.returncode}")
-    if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
-        print("(note) conflict markers found in the merged file")
+        if merged == err.output:
+            print("(note) conflicted file is unchanged")
 
-    # Was the merge successful?
-    if input("  Merge successful? (y/N) ").lower() != "y":
-        raise MergeConflict("user aborted")
+        if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
+            print("(note) conflict markers found in the merged file")
+
+        # Was the merge successful?
+        if input("  Merge successful? (y/N) ").lower() != "y":
+            raise MergeConflict("user aborted")
+
     return Blob(current.repo, merged)

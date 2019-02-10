@@ -1,6 +1,5 @@
 from typing import Optional, List
 from argparse import ArgumentParser, Namespace
-import subprocess
 import sys
 
 from .odb import Repository, Commit
@@ -149,10 +148,7 @@ def main(argv: Optional[List[str]] = None):
     with Repository() as repo:
         # If '-a' was specified, stage all changes.
         if args.all:
-            print("Staging all changes")
-            if subprocess.run(["git", "add", "-u"], cwd=repo.workdir).returncode != 0:
-                print("Couldn't stage changes", file=sys.stderr)
-                sys.exit(1)
+            repo.git("add", "-u")
 
         # Create a commit with changes from the index
         staged = None if args.no_index else repo.commit_staged(b"<git index>")

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from subprocess import run, PIPE
+from subprocess import run
 import textwrap
 import sys
 import os
@@ -61,32 +61,20 @@ def run_editor(
 def edit_commit_message(commit: Commit) -> Commit:
     """Launch an editor to edit the commit message of ``commit``, returning
     a modified commit"""
+    repo = commit.repo
+    comments = (
+        "Please enter the commit message for your changes. Lines starting\n"
+        "with '#' will be ignored, and an empty message aborts the commit.\n"
+    )
 
     # If the target commit is not the initial commit, produce a diff --stat to
     # include in the commit message comments.
     if len(commit.parents()) == 1:
-        base_tree = commit.parent().tree().persist().hex()
-        commit_tree = commit.tree().persist().hex()
+        tree_a = commit.parent().tree().persist().hex()
+        tree_b = commit.tree().persist().hex()
+        comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
 
-        diff_stat = run(
-            ["git", "diff-tree", "--stat", base_tree, commit_tree],
-            check=True,
-            stdout=PIPE,
-            cwd=commit.repo.workdir,
-        ).stdout.decode(errors="replace")
-    else:
-        diff_stat = "<initial commit>"
-
-    message = run_editor(
-        commit.repo,
-        "COMMIT_EDITMSG",
-        commit.message,
-        comments='\n'.join([
-            "Please enter the commit message for your changes. Lines starting",
-            "with '#' will be ignored, and an empty message aborts the commit.\n",
-            diff_stat,
-        ])
-    )
+    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, comments=comments)
     return commit.update(message=message)
 
 
@@ -121,27 +109,15 @@ def cut_commit(commit: Commit) -> Commit:
     env["GIT_INDEX_FILE"] = str(temp_index)
 
     # Read the target tree into a temporary index.
-    run(
-        ["git", "read-tree", commit.tree().persist().hex()],
-        check=True,
-        env=env,
-        cwd=repo.workdir,
-    )
+    repo.git("read-tree", commit.tree().persist().hex())
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into which part.
-    run(
-        ["git", "reset", "--patch", commit.parent().persist().hex()],
-        check=True,
-        env=env,
-        cwd=repo.workdir,
-    )
+    repo.git("reset", "--patch", commit.parent().persist().hex())
 
     # Use write-tree to get the new intermediate tree state.
-    written = run(
-        ["git", "write-tree"], check=True, stdout=PIPE, env=env, cwd=repo.workdir
-    )
-    mid_tree = repo.get_tree(Oid.fromhex(written.stdout.rstrip().decode()))
+    written = repo.git("write-tree", env=env).decode()
+    mid_tree = repo.get_tree(Oid.fromhex(written))
 
     # Check if one or the other of the commits will be empty
     if mid_tree == commit.parent().tree() or mid_tree == commit.tree():
