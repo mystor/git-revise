@@ -18,9 +18,9 @@ from queue import Queue, Empty
 RESOURCES = Path(__file__).parent / "resources"
 
 
-@pytest.fixture(scope="session")
-def bash():
-    def run_bash(command, check=True, cwd=None):
+@pytest.fixture
+def bash(repo):
+    def run_bash(command, check=True, cwd=repo.workdir):
         subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd)
 
     return run_bash
@@ -50,13 +50,15 @@ class TestRepo(Repository):
 
 
 @pytest.fixture
-def repo(tmp_path_factory, monkeypatch, bash):
-    # Create a working directory, change into it, and run 'git init -q' to
-    # create a git repo there.
+def repo(tmp_path_factory, monkeypatch):
+    # Create a working directory, and start the repository in it.
+    # We also change into a different temporary directory to make sure the code
+    # doesn't require pwd to be the workdir.
+    monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
+
     workdir = tmp_path_factory.mktemp("repo")
-    monkeypatch.chdir(workdir)
-    bash("git init -q", cwd=workdir)
-    return TestRepo()
+    subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
+    return TestRepo(workdir)
 
 
 @pytest.fixture
