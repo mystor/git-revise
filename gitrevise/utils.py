@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
@@ -21,6 +21,38 @@ def commit_range(base: Commit, tip: Commit) -> List[Commit]:
         tip = tip.parent()
     commits.reverse()
     return commits
+
+
+def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
+    """Returns an oldest-first iterator over the local commits which are
+    parents of the specified commit. May return an empty list. A commit is
+    considered local if it is not present on any remote."""
+
+    # Keep track of the current base commit we're expecting. This serves two
+    # purposes. Firstly, it lets us return a base commit to our caller, and
+    # secondly it allows us to ensure the commits ``git log`` is producing form
+    # a single-parent chain from our initial commit.
+    base = tip
+
+    # Call `git log` to log out the OIDs of the commits in our specified range.
+    log = repo.git("log", base.oid.hex(), "--not", "--remotes", "--pretty=%H")
+
+    # Build a list of commits, validating each commit is part of a single-parent chain.
+    commits = []
+    for line in log.splitlines():
+        commit = repo.get_commit(Oid.fromhex(line.decode()))
+
+        # Ensure the commit we got is the parent of the previous logged commit.
+        if len(commit.parents()) != 1 or commit != base:
+            break
+        base = commit.parent()
+
+        # Add the commit to our list.
+        commits.append(commit)
+
+    # Reverse our list into oldest-first order.
+    commits.reverse()
+    return base, commits
 
 
 def edit_file(path: Path) -> bytes:

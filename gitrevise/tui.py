@@ -3,10 +3,15 @@ from argparse import ArgumentParser, Namespace
 import sys
 
 from .odb import Repository, Commit
-from .utils import commit_range, edit_commit_message, update_head, cut_commit
+from .utils import (
+    commit_range,
+    edit_commit_message,
+    update_head,
+    cut_commit,
+    local_commits,
+)
 from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
-
-__version__ = "0.1"
+from . import __version__
 
 
 def build_parser() -> ArgumentParser:
@@ -15,7 +20,7 @@ def build_parser() -> ArgumentParser:
         Rebase staged changes onto the given commit, and rewrite history to
         incorporate these changes."""
     )
-    parser.add_argument("target", help="target commit to apply fixups to")
+    parser.add_argument("target", nargs="?", help="target commit to apply fixups to")
     parser.add_argument("--ref", default="HEAD", help="reference to update")
     parser.add_argument(
         "--reauthor",
@@ -75,8 +80,11 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     if head.target is None:
         raise ValueError("Invalid target reference")
 
-    target = repo.get_commit(args.target)
-    to_rebase = commit_range(target, head.target)
+    if args.target is None:
+        base, to_rebase = local_commits(repo, head.target)
+    else:
+        base = repo.get_commit(args.target)
+        to_rebase = commit_range(base, head.target)
 
     # Build up an initial todos list, edit that todos list.
     todos = original = build_todos(to_rebase, staged)
@@ -92,13 +100,16 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
         return
 
     # Perform the todo list actions.
-    new_head = apply_todos(target, todos, reauthor=args.reauthor)
+    new_head = apply_todos(base, todos, reauthor=args.reauthor)
 
     # Update the value of HEAD to the new state.
     update_head(head, new_head, None)
 
 
 def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
+    if args.target is None:
+        raise ValueError("<target> is a required argument")
+
     head = repo.get_commit_ref(args.ref)
     if head.target is None:
         raise ValueError("Invalid target reference")
