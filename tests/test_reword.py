@@ -1,10 +1,7 @@
 # pylint: skip-file
 
-from gitrevise.odb import Commit
-from gitrevise.tui import main
 
-
-def reword_helper(repo, flags, target, message):
+def reword_helper(repo, main, flags, target, message):
     old = repo.get_commit(target)
     assert old.message != message.encode()
     assert old.persisted
@@ -22,27 +19,29 @@ def reword_helper(repo, flags, target, message):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_reword_head(repo):
+def test_reword_head(repo, main):
     repo.load_template("basic")
     reword_helper(
         repo,
+        main,
         ["--no-index", "-m", "reword_head test", "-m", "another line"],
         "HEAD",
         "reword_head test\n\nanother line\n",
     )
 
 
-def test_reword_nonhead(repo):
+def test_reword_nonhead(repo, main):
     repo.load_template("basic")
     reword_helper(
         repo,
+        main,
         ["--no-index", "-m", "reword_nonhead test", "-m", "another line"],
         "HEAD~",
         "reword_nonhead test\n\nanother line\n",
     )
 
 
-def test_reword_head_editor(repo, fake_editor):
+def test_reword_head_editor(repo, main, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
@@ -54,13 +53,14 @@ def test_reword_head_editor(repo, fake_editor):
     with fake_editor(editor):
         reword_helper(
             repo,
+            main,
             ["--no-index", "-e"],
             "HEAD",
             "reword_head_editor test\n\nanother line\n",
         )
 
 
-def test_reword_nonhead_editor(repo, fake_editor):
+def test_reword_nonhead_editor(repo, main, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
@@ -72,13 +72,14 @@ def test_reword_nonhead_editor(repo, fake_editor):
     with fake_editor(editor):
         reword_helper(
             repo,
+            main,
             ["--no-index", "-e"],
             "HEAD~",
             "reword_nonhead_editor test\n\nanother line\n",
         )
 
 
-def test_reword_root(repo, bash):
+def test_reword_root(repo, main, bash):
     bash(
         """
         echo "hello, world" > file1

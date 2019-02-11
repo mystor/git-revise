@@ -1,10 +1,7 @@
 # pylint: skip-file
 
-from io import StringIO
-from gitrevise.tui import main
 
-
-def fixup_helper(repo, bash, flags, target, message=None):
+def fixup_helper(repo, bash, main, flags, target, message=None):
     old = repo.get_commit(target)
     assert old.persisted
 
@@ -33,39 +30,41 @@ def fixup_helper(repo, bash, flags, target, message=None):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_fixup_head(repo, bash):
+def test_fixup_head(repo, bash, main):
     repo.load_template("basic")
-    fixup_helper(repo, bash, [], "HEAD")
+    fixup_helper(repo, bash, main, [], "HEAD")
 
 
-def test_fixup_nonhead(repo, bash):
+def test_fixup_nonhead(repo, bash, main):
     repo.load_template("basic")
-    fixup_helper(repo, bash, [], "HEAD~")
+    fixup_helper(repo, bash, main, [], "HEAD~")
 
 
-def test_fixup_head_msg(repo, bash):
+def test_fixup_head_msg(repo, bash, main):
     repo.load_template("basic")
     fixup_helper(
         repo,
         bash,
+        main,
         ["-m", "fixup_head test", "-m", "another line"],
         "HEAD",
         "fixup_head test\n\nanother line\n",
     )
 
 
-def test_fixup_nonhead_msg(repo, bash):
+def test_fixup_nonhead_msg(repo, bash, main):
     repo.load_template("basic")
     fixup_helper(
         repo,
         bash,
+        main,
         ["-m", "fixup_nonhead test", "-m", "another line"],
         "HEAD~",
         "fixup_nonhead test\n\nanother line\n",
     )
 
 
-def test_fixup_head_editor(repo, bash, fake_editor):
+def test_fixup_head_editor(repo, bash, main, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
@@ -76,10 +75,10 @@ def test_fixup_head_editor(repo, bash, fake_editor):
         outq.put(newmsg.encode())
 
     with fake_editor(editor):
-        fixup_helper(repo, bash, ["-e"], "HEAD", newmsg)
+        fixup_helper(repo, bash, main, ["-e"], "HEAD", newmsg)
 
 
-def test_fixup_nonhead_editor(repo, bash, fake_editor):
+def test_fixup_nonhead_editor(repo, bash, main, fake_editor):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
@@ -90,10 +89,10 @@ def test_fixup_nonhead_editor(repo, bash, fake_editor):
         outq.put(newmsg.encode())
 
     with fake_editor(editor):
-        fixup_helper(repo, bash, ["-e"], "HEAD~", newmsg)
+        fixup_helper(repo, bash, main, ["-e"], "HEAD~", newmsg)
 
 
-def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
+def test_fixup_nonhead_conflict(repo, bash, main, fake_editor):
     import textwrap
 
     repo.load_template("basic")
@@ -136,16 +135,14 @@ def test_fixup_nonhead_conflict(repo, bash, fake_editor, monkeypatch):
         outq.put(b"conflict2\n")
 
     with fake_editor(editor):
-        monkeypatch.setattr("sys.stdin", StringIO("y\ny\ny\ny\n"))
-
-        main(["HEAD~"])
+        main(["HEAD~"], input=b"y\ny\ny\ny\n")
 
         new = repo.get_commit("HEAD~")
         assert new.persisted
         assert new != old
 
 
-def test_autosquash_nonhead(repo, bash):
+def test_autosquash_nonhead(repo, bash, main):
     bash(
         """
         echo "hello, world" > file1

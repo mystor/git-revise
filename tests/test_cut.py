@@ -1,10 +1,7 @@
 # pylint: skip-file
 
-from io import StringIO
-from gitrevise.tui import main
 
-
-def test_cut(repo, bash, fake_editor, monkeypatch):
+def test_cut(repo, bash, fake_editor, main):
     bash(
         """
         echo "Hello, World" >> file1
@@ -26,8 +23,6 @@ def test_cut(repo, bash, fake_editor, monkeypatch):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    monkeypatch.setattr("sys.stdin", StringIO("y\nn\n"))
-
     def editor(inq, outq):
         assert inq.get().startswith(b"[1] commit 2\n")
         outq.put(b"part 1\n")
@@ -36,7 +31,7 @@ def test_cut(repo, bash, fake_editor, monkeypatch):
         outq.put(b"part 2\n")
 
     with fake_editor(editor):
-        main(["--cut", "HEAD~"])
+        main(["--cut", "HEAD~"], input=b"y\nn\n")
 
     new = repo.get_commit("HEAD")
     new_u2 = new.parent()

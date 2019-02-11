@@ -1,11 +1,9 @@
 # pylint: skip-file
 
 import textwrap
-from gitrevise.odb import Commit
-from gitrevise.tui import main
 
 
-def test_interactive_reorder(repo, bash, fake_editor):
+def test_interactive_reorder(repo, bash, main, fake_editor):
     bash(
         """
         echo "hello, world" > file1
@@ -66,7 +64,7 @@ def test_interactive_reorder(repo, bash, fake_editor):
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
 
 
-def test_interactive_fixup(repo, bash, fake_editor):
+def test_interactive_fixup(repo, bash, main, fake_editor):
     bash(
         """
         echo "hello, world" > file1
@@ -90,13 +88,13 @@ def test_interactive_fixup(repo, bash, fake_editor):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    index_tree = repo.index_tree()
+    index_tree = repo.index.tree()
 
     def editor(inq, outq):
         in_todo = inq.get()
 
         # Get the index tree to check it
-        index = repo.commit_staged()
+        index = repo.index.commit()
 
         expected = textwrap.dedent(
             f"""\

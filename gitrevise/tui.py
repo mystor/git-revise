@@ -151,7 +151,7 @@ def main(argv: Optional[List[str]] = None):
             repo.git("add", "-u")
 
         # Create a commit with changes from the index
-        staged = None if args.no_index else repo.commit_staged(b"<git index>")
+        staged = None if args.no_index else repo.index.commit(message=b"<git index>")
         if staged and staged.tree() == staged.parent().tree():
             staged = None  # No changes, ignore the commit
 

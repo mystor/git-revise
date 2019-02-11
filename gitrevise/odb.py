@@ -4,6 +4,7 @@ Helper classes for reading cached objects from Git's Object Database.
 
 import hashlib
 import re
+import os
 from typing import (
     TypeVar,
     Type,
@@ -151,6 +152,9 @@ class Repository:
     default_committer: Signature
     """committer used by default for new commits"""
 
+    index: "Index"
+    """current index state"""
+
     _objects: Dict[int, Dict[Oid, "GitObj"]]
     _catfile: Popen
     _tempdir: Optional[TemporaryDirectory]
@@ -160,6 +164,7 @@ class Repository:
         "gitdir",
         "default_author",
         "default_committer",
+        "index",
         "_objects",
         "_catfile",
         "_tempdir",
@@ -175,6 +180,8 @@ class Repository:
         # Cache for length of time & invalidate?
         self.default_author = Signature.parse(self.git("var", "GIT_AUTHOR_IDENT"))
         self.default_committer = Signature.parse(self.git("var", "GIT_COMMITTER_IDENT"))
+
+        self.index = Index(self)
 
         self._catfile = Popen(
             ["git", "cat-file", "--batch"],
@@ -228,6 +235,10 @@ class Repository:
             self._tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
         return Path(self._tempdir.name)
 
+    def git_path(self, path: Union[str, Path]) -> Path:
+        """Get the path to a file in the .git directory, respecting the environment"""
+        return self.workdir / self.git("rev-parse", "--git-path", str(path)).decode()
+
     def new_commit(
         self,
         tree: "Tree",
@@ -270,15 +281,6 @@ class Repository:
         for name, entry in sorted(entries.items(), key=entry_key):
             body += cast(bytes, entry.mode.value) + b" " + name + b"\0" + entry.oid
         return Tree(self, body)
-
-    def index_tree(self) -> "Tree":
-        """Create a tree object containing the staged state of the git index"""
-        oid = Oid.fromhex(self.git("write-tree").decode())
-        return self.get_tree(oid)
-
-    def commit_staged(self, message: bytes = b"<git index>") -> "Commit":
-        """Create an in-memory commit containing the staged state of the git index"""
-        return self.new_commit(self.index_tree(), [self.get_commit("HEAD")], message)
 
     def get_obj(self, ref: Union[Oid, str]) -> "GitObj":
         """Get the identified git object from this repository. If given an
@@ -655,6 +657,54 @@ class Blob(GitObj):
 
     def __repr__(self) -> str:
         return f"<Blob {self.oid} ({len(self.body)} bytes)>"
+
+
+class Index:
+    """Handle on an index file"""
+
+    repo: Repository
+    """"""
+
+    index_file: Path
+    """Index file being referenced"""
+
+    def __init__(self, repo: Repository, index_file: Optional[Path] = None):
+        self.repo = repo
+
+        if index_file is None:
+            index_file = self.repo.git_path("index")
+        self.index_file = index_file
+
+        assert self.git("rev-parse", "--git-path", "index").decode() == str(index_file)
+
+    def git(
+        self,
+        *cmd: str,
+        cwd: Optional[Path] = None,
+        stdin: Optional[bytes] = None,
+        newline: bool = True,
+        env: Mapping[str, str] = os.environ,
+    ) -> bytes:
+        """Invoke git with the given index as active"""
+        env = dict(**env)
+        env["GIT_INDEX_FILE"] = str(self.index_file)
+        return self.repo.git(*cmd, cwd=cwd, stdin=stdin, newline=newline, env=env)
+
+    def tree(self) -> Tree:
+        """Get a :class:`Tree` object for this index's state"""
+        oid = Oid.fromhex(self.git("write-tree").decode())
+        return self.repo.get_tree(oid)
+
+    def commit(
+        self, message: bytes = b"<git index>", parent: Optional[Commit] = None
+    ) -> Commit:
+        """Get a :class:`Commit` for this index's state. If ``parent`` is
+        ``None``, use the current ``HEAD``"""
+
+        if parent is None:
+            parent = self.repo.get_commit("HEAD")
+
+        return self.repo.new_commit(self.tree(), [parent], message)
 
 
 class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object

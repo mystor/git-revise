@@ -3,10 +3,9 @@ from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
 import sys
-import os
 import shlex
 
-from .odb import Repository, Commit, Tree, Oid, Reference
+from .odb import Repository, Commit, Tree, Oid, Reference, Index
 
 
 class EditorError(Exception):
@@ -123,20 +122,19 @@ def cut_commit(commit: Commit) -> Commit:
     repo = commit.repo
 
     # Create an environment with an explicit index file.
-    temp_index = repo.get_tempdir() / "TEMP_INDEX"
-    env = dict(os.environ)
-    env["GIT_INDEX_FILE"] = str(temp_index)
+    index = Index(repo, repo.get_tempdir() / "TEMP_INDEX")
 
     # Read the target tree into a temporary index.
-    repo.git("read-tree", commit.tree().persist().hex())
+    index.git("read-tree", commit.tree().persist().hex())
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into which part.
-    repo.git("reset", "--patch", commit.parent().persist().hex())
+    print("AAAAAAAA\n\n---")
+    index.git("reset", "--patch", commit.parent().persist().hex())
+    print("BBBBBBBA\n\n---")
 
-    # Use write-tree to get the new intermediate tree state.
-    written = repo.git("write-tree", env=env).decode()
-    mid_tree = repo.get_tree(Oid.fromhex(written))
+    # Write out the newly created tree.
+    mid_tree = index.tree()
 
     # Check if one or the other of the commits will be empty
     if mid_tree == commit.parent().tree() or mid_tree == commit.tree():

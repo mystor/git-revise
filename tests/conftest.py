@@ -60,6 +60,16 @@ def repo(tmp_path_factory, monkeypatch, bash):
 
 
 @pytest.fixture
+def main(repo):
+    # Run the main entry point for git-revise in a subprocess.
+    def main(args, **kwargs):
+        kwargs["cwd"] = repo.workdir
+        subprocess.run([sys.executable, "-m", "gitrevise", *args], **kwargs)
+
+    return main
+
+
+@pytest.fixture
 def fake_editor(tmp_path_factory, monkeypatch):
     @contextmanager
     def fake_editor(handler):

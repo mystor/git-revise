@@ -7,5 +7,6 @@ disable=
     too-many-branches,
     too-many-return-statements,
     too-few-public-methods,
+    too-many-instance-attributes,
     cyclic-import,
     fixme
