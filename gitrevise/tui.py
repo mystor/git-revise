@@ -1,9 +1,11 @@
 from typing import Optional, List
 from argparse import ArgumentParser, Namespace
+from subprocess import CalledProcessError
 import sys
 
 from .odb import Repository, Commit
 from .utils import (
+    EditorError,
     commit_range,
     edit_commit_message,
     update_head,
@@ -11,6 +13,7 @@ from .utils import (
     local_commits,
 )
 from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
+from .merge import MergeConflict
 from . import __version__
 
 
@@ -156,18 +159,31 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
 
 def main(argv: Optional[List[str]] = None):
     args = build_parser().parse_args(argv)
-    with Repository() as repo:
-        # If '-a' was specified, stage all changes.
-        if args.all:
-            repo.git("add", "-u")
+    try:
+        with Repository() as repo:
+            # If '-a' was specified, stage all changes.
+            if args.all:
+                repo.git("add", "-u")
 
-        # Create a commit with changes from the index
-        staged = None if args.no_index else repo.index.commit(message=b"<git index>")
-        if staged and staged.tree() == staged.parent().tree():
-            staged = None  # No changes, ignore the commit
+            # Create a commit with changes from the index
+            staged = None if args.no_index else repo.index.commit(message=b"<git index>")
+            if staged and staged.tree() == staged.parent().tree():
+                staged = None  # No changes, ignore the commit
 
-        # Either enter the interactive or non-interactive codepath.
-        if args.interactive or args.autosquash:
-            interactive(args, repo, staged)
-        else:
-            noninteractive(args, repo, staged)
+            # Either enter the interactive or non-interactive codepath.
+            if args.interactive or args.autosquash:
+                interactive(args, repo, staged)
+            else:
+                noninteractive(args, repo, staged)
+    except CalledProcessError as err:
+        print(f"subprocess exited with non-zero status: {err.returncode}")
+        exit(1)
+    except EditorError as err:
+        print(f"editor error: {err}")
+        exit(1)
+    except MergeConflict as err:
+        print(f"merge conflict: {err}")
+        exit(1)
+    except ValueError as err:
+        print(f"invalid value: {err}")
+        exit(1)
