@@ -9,7 +9,7 @@
 SYNOPSIS
 ========
 
-*git revise* [<options>] <target>
+*git revise* [<options>] [<target>]
 
 DESCRIPTION
 ===========
@@ -27,6 +27,10 @@ Unlike :manpage:`git-rebase(1)`, :program:`git revise` avoids modifying
 working directory and index state, performing all merges in-memory, and only
 writing them when necessary. This allows it to be significantly faster on
 large codebases, and avoid invalidating builds.
+
+If :option:`--autosquash` or :option:`--interactive` is specified, the
+<target> argument is optional. If it is omitted, :program:`git revise` will
+consider a range of unpublished commits on the current branch.
 
 OPTIONS
 =======

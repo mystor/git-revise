@@ -32,7 +32,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 ..
 .SH SYNOPSIS
 .sp
-\fIgit revise\fP [<options>] <target>
+\fIgit revise\fP [<options>] [<target>]
 .SH DESCRIPTION
 .sp
 \fBgit revise\fP is a \fBgit(1)\fP subcommand to efficiently
@@ -48,6 +48,10 @@ Unlike \fBgit\-rebase(1)\fP, \fBgit revise\fP avoids modifying
 working directory and index state, performing all merges in\-memory, and only
 writing them when necessary. This allows it to be significantly faster on
 large codebases, and avoid invalidating builds.
+.sp
+If \fI\%\-\-autosquash\fP or \fI\%\-\-interactive\fP is specified, the
+<target> argument is optional. If it is omitted, \fBgit revise\fP will
+consider a range of unpublished commits on the current branch.
 .SH OPTIONS
 .SS General options
 .INDENT 0.0
@@ -63,7 +67,7 @@ Ignore staged changes in the index.
 .INDENT 0.0
 .TP
 .B \-\-reauthor
-Reset target commit’s author to the current user.
+Reset target commit\(aqs author to the current user.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -90,7 +94,7 @@ These commits are usually created with \fBgit commit \-\-fixup=<commit>\fP or
 line of its commit message.
 .sp
 This option can be combined with \fI\%\-\-interactive\fP to modify the
-generated todos before they’re executed.
+generated todos before they\(aqre executed.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -98,15 +102,15 @@ generated todos before they’re executed.
 Interactively select hunks from <target>. The chosen hunks are split into
 a second commit immediately after the target.
 .sp
-After splitting is complete, both commit’s messages are edited.
+After splitting is complete, both commit\(aqs messages are edited.
 .sp
-See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B \-e, \-\-edit
-After applying staged changes, edit <target>’s commit message.
+After applying staged changes, edit <target>\(aqs commit message.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -148,7 +152,7 @@ modifying history on a repository that you share.
 \fBgit revise\fP supports an interactive mode inspired by the
 interactive mode of \fBgit\-rebase(1)\fP\&.
 .sp
-This mode is started with the last commit you want to retain “as\-is”:
+This mode is started with the last commit you want to retain "as\-is":
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -194,13 +198,13 @@ Use the given commit as\-is in history. When applied to the generated
 .INDENT 0.0
 .TP
 .B fixup
-Add the commit’s changes into the previous commit, discarding it’s commit
+Add the commit\(aqs changes into the previous commit, discarding it\(aqs commit
 message.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B squash
-Like fuse, but also open an editor to merge the commit’s messages.
+Like fuse, but also open an editor to merge the commit\(aqs messages.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -213,9 +217,9 @@ Open an eitor to modify the commit message.
 Interactively select hunks from the commit. The chosen hunks are split
 into a second commit immediately after it.
 .sp
-After splitting is complete, both commit’s messages are edited.
+After splitting is complete, both commit\(aqs messages are edited.
 .sp
-See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .SH REPORTING BUGS
