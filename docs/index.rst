@@ -15,6 +15,7 @@ library for efficiently updating, splitting, and rearranging commits.
    man
    performance
    api/index
+   contributing
 
 .. _GitHub: https://github.com/mystor/git-revise
 
