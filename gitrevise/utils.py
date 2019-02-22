@@ -161,9 +161,7 @@ def cut_commit(commit: Commit) -> Commit:
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into which part.
-    print("AAAAAAAA\n\n---")
-    index.git("reset", "--patch", commit.parent().persist().hex())
-    print("BBBBBBBA\n\n---")
+    index.git("reset", "--patch", commit.parent().persist().hex(), nocapture=True)
 
     # Write out the newly created tree.
     mid_tree = index.tree()

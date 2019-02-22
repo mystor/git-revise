@@ -206,13 +206,23 @@ class Repository:
         stdin: Optional[bytes] = None,
         newline: bool = True,
         env: Dict[str, str] = None,
+        nocapture: bool = False,
     ) -> bytes:
         if cwd is None:
             cwd = getattr(self, "workdir", None)
 
         cmd = ("git",) + cmd
-        prog = run(cmd, stdout=PIPE, cwd=cwd, env=env, input=stdin, check=True)
+        prog = run(
+            cmd,
+            stdout=None if nocapture else PIPE,
+            cwd=cwd,
+            env=env,
+            input=stdin,
+            check=True,
+        )
 
+        if nocapture:
+            return b""
         if newline and prog.stdout.endswith(b"\n"):
             return prog.stdout[:-1]
         return prog.stdout
@@ -572,6 +582,9 @@ class Mode(Enum):
     def is_file(self) -> bool:
         return self in (Mode.REGULAR, Mode.EXEC)
 
+    def comparable_to(self, other: "Mode") -> bool:
+        return self == other or (self.is_file() and other.is_file())
+
 
 class Entry:
     """In memory representation of a single ``tree`` entry"""
@@ -684,11 +697,14 @@ class Index:
         stdin: Optional[bytes] = None,
         newline: bool = True,
         env: Mapping[str, str] = os.environ,
+        nocapture: bool = False,
     ) -> bytes:
         """Invoke git with the given index as active"""
         env = dict(**env)
         env["GIT_INDEX_FILE"] = str(self.index_file)
-        return self.repo.git(*cmd, cwd=cwd, stdin=stdin, newline=newline, env=env)
+        return self.repo.git(
+            *cmd, cwd=cwd, stdin=stdin, newline=newline, env=env, nocapture=nocapture
+        )
 
     def tree(self) -> Tree:
         """Get a :class:`Tree` object for this index's state"""
