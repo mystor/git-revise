@@ -72,22 +72,10 @@ class Oid(bytes):
         return self.hex()
 
 
-class Signature:
+class Signature(bytes):
     """Git user signature"""
 
-    name: bytes
-    """user name"""
-
-    email: bytes
-    """user email"""
-
-    timestamp: bytes
-    """unix timestamp"""
-
-    offset: bytes
-    """timezone offset from UTC"""
-
-    __slots__ = ("name", "email", "timestamp", "offset")
+    __slots__ = ()
 
     sig_re = re.compile(
         rb"""
@@ -98,43 +86,33 @@ class Signature:
         re.X,
     )
 
-    @classmethod
-    def parse(cls, spec: bytes) -> "Signature":
-        """Parse a signature from git format"""
-        match = cls.sig_re.fullmatch(spec)
-        assert match is not None, "Invalid Signature"
+    @property
+    def name(self) -> bytes:
+        """user name"""
+        match = self.sig_re.fullmatch(self)
+        assert match, "invalid signature"
+        return match.group("name").strip()
 
-        return Signature(
-            match.group("name").strip(),
-            match.group("email").strip(),
-            match.group("timestamp").strip(),
-            match.group("offset").strip(),
-        )
+    @property
+    def email(self) -> bytes:
+        """user email"""
+        match = self.sig_re.fullmatch(self)
+        assert match, "invalid signature"
+        return match.group("email").strip()
 
-    def __init__(self, name: bytes, email: bytes, timestamp: bytes, offset: bytes):
-        self.name = name
-        self.email = email
-        self.timestamp = timestamp
-        self.offset = offset
+    @property
+    def timestamp(self) -> bytes:
+        """unix timestamp"""
+        match = self.sig_re.fullmatch(self)
+        assert match, "invalid signature"
+        return match.group("timestamp").strip()
 
-    def raw(self) -> bytes:
-        """Encode this signature into git format"""
-        return (
-            self.name + b" <" + self.email + b"> " + self.timestamp + b" " + self.offset
-        )
-
-    def __repr__(self):
-        return f"<Signature {self.name}, {self.email}, {self.timestamp}, {self.offset}>"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Signature):
-            return False
-        return (
-            self.name == other.name
-            and self.email == other.email
-            and self.timestamp == other.timestamp
-            and self.offset == other.offset
-        )
+    @property
+    def offset(self) -> bytes:
+        """timezone offset from UTC"""
+        match = self.sig_re.fullmatch(self)
+        assert match, "invalid signature"
+        return match.group("offset").strip()
 
 
 class Repository:
@@ -178,8 +156,8 @@ class Repository:
 
         # XXX(nika): Does it make more sense to cache these or call every time?
         # Cache for length of time & invalidate?
-        self.default_author = Signature.parse(self.git("var", "GIT_AUTHOR_IDENT"))
-        self.default_committer = Signature.parse(self.git("var", "GIT_COMMITTER_IDENT"))
+        self.default_author = Signature(self.git("var", "GIT_AUTHOR_IDENT"))
+        self.default_committer = Signature(self.git("var", "GIT_COMMITTER_IDENT"))
 
         self.index = Index(self)
 
@@ -268,8 +246,8 @@ class Repository:
         body = b"tree " + tree.oid.hex().encode("ascii") + b"\n"
         for parent in parents:
             body += b"parent " + parent.oid.hex().encode("ascii") + b"\n"
-        body += b"author " + author.raw() + b"\n"
-        body += b"committer " + committer.raw() + b"\n"
+        body += b"author " + author + b"\n"
+        body += b"committer " + committer + b"\n"
         body += b"\n"
         body += message
         return Commit(self, body)
@@ -487,9 +465,9 @@ class Commit(GitObj):
             elif key == b"parent":
                 self.parent_oids.append(Oid.fromhex(value.decode()))
             elif key == b"author":
-                self.author = Signature.parse(value)
+                self.author = Signature(value)
             elif key == b"committer":
-                self.committer = Signature.parse(value)
+                self.committer = Signature(value)
 
     def tree(self) -> "Tree":
         """``tree`` object corresponding to this commit"""
