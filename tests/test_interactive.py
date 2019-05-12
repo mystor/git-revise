@@ -145,3 +145,78 @@ def test_interactive_fixup(repo, bash, main, fake_editor):
     assert prev_u.tree().entries[b"file2"] == curr.tree().entries[b"file2"]
     assert prev_u.tree().entries[b"file1"] == curr_uu.tree().entries[b"file1"]
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
+
+
+def test_interactive_reword(repo, bash, main, fake_editor):
+    bash(
+        """
+        echo "hello, world" > file1
+        git add file1
+        git commit -m "commit one" -m "extended1"
+
+        echo "second file" > file2
+        git add file2
+        git commit -m "commit two" -m "extended2"
+
+        echo "new line!" >> file1
+        git add file1
+        git commit -m "commit three" -m "extended3"
+        """
+    )
+
+    prev = repo.get_commit("HEAD")
+    prev_u = prev.parent()
+    prev_uu = prev_u.parent()
+
+    def editor(inq, outq):
+        in_todo = inq.get()
+        expected = textwrap.dedent(
+            f"""\
+            ++ pick {prev.parent().oid.short()}
+            commit two
+
+            extended2
+
+            ++ pick {prev.oid.short()}
+            commit three
+
+            extended3
+            """
+        ).encode()
+        assert in_todo.startswith(expected)
+
+        outq.put(
+            textwrap.dedent(
+                f"""\
+                ++ pick {prev.oid.short()}
+                updated commit three
+
+                extended3 updated
+
+                ++ pick {prev.parent().oid.short()}
+                updated commit two
+
+                extended2 updated
+                """
+            ).encode()
+        )
+
+    with fake_editor(editor):
+        main(["-ie", "HEAD~~"])
+
+    curr = repo.get_commit("HEAD")
+    curr_u = curr.parent()
+    curr_uu = curr_u.parent()
+
+    assert curr != prev
+    assert curr.tree() == prev.tree()
+    assert curr_u.message == b"updated commit three\n\nextended3 updated\n"
+    assert curr.message == b"updated commit two\n\nextended2 updated\n"
+    assert curr_uu == prev_uu
+
+    assert b"file2" in prev_u.tree().entries
+    assert b"file2" not in curr_u.tree().entries
+
+    assert prev_u.tree().entries[b"file2"] == curr.tree().entries[b"file2"]
+    assert prev_u.tree().entries[b"file1"] == curr_uu.tree().entries[b"file1"]
+    assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]

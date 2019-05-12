@@ -1,9 +1,8 @@
 import re
-import sys
 from enum import Enum
-from typing import List, Set, Optional
+from typing import List, Optional
 
-from .odb import Commit, Oid, Repository
+from .odb import Commit, Repository
 from .utils import run_editor, edit_commit_message, cut_commit
 
 
@@ -40,10 +39,12 @@ class StepKind(Enum):
 class Step:
     kind: StepKind
     commit: Commit
+    message: Optional[bytes]
 
     def __init__(self, kind: StepKind, commit: Commit):
         self.kind = kind
         self.commit = commit
+        self.message = None
 
     @staticmethod
     def parse(repo: Repository, instr: str) -> "Step":
@@ -56,13 +57,17 @@ class Step:
         commit = repo.get_commit(parsed.group("hash"))
         return Step(kind, commit)
 
-    def __str__(self):
-        return f"{self.kind} {self.commit.oid.short()} {self.commit.summary()}"
+    def __str__(self) -> str:
+        return f"{self.kind} {self.commit.oid.short()}"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Step):
             return False
-        return self.kind == other.kind and self.commit == other.commit
+        return (
+            self.kind == other.kind
+            and self.commit == other.commit
+            and self.message == other.message
+        )
 
 
 def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
@@ -70,6 +75,33 @@ def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
     if index:
         steps.append(Step(StepKind.INDEX, index))
     return steps
+
+
+def validate_todos(old: List[Step], new: List[Step]):
+    """Raise an exception if the new todo list is malformed compared to the
+    original todo list"""
+    old_set = set(o.commit.oid for o in old)
+    new_set = set(n.commit.oid for n in new)
+
+    assert len(old_set) == len(old), "Unexpected duplicate original commit!"
+    if len(new_set) != len(new):
+        # XXX(nika): Perhaps print which commits are duplicates?
+        raise ValueError("Unexpected duplicate commit found in todos")
+
+    if new_set - old_set:
+        # XXX(nika): Perhaps print which commits were found?
+        raise ValueError("Unexpected commits not referenced in original TODO list")
+
+    if old_set - new_set:
+        # XXX(nika): Perhaps print which commits were omitted?
+        raise ValueError("Unexpected commits missing from TODO list")
+
+    saw_index = False
+    for step in new:
+        if step.kind == StepKind.INDEX:
+            saw_index = True
+        elif saw_index:
+            raise ValueError("'index' actions follow all non-index todo items")
 
 
 def autosquash_todos(todos: List[Step]) -> List[Step]:
@@ -102,15 +134,68 @@ def autosquash_todos(todos: List[Step]) -> List[Step]:
     return new_todos
 
 
-def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
+def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
+    todos_text = b""
+    for step in todos:
+        todos_text += f"++ {step}\n".encode()
+        todos_text += step.commit.message + b"\n"
+
     # Invoke the editors to parse commit messages.
-    todos_text = "\n".join(str(step) for step in todos).encode()
     response = run_editor(
         repo,
         "git-revise-todo",
         todos_text,
         comments=f"""\
-        Interactive Zipfix Todos ({len(todos)} commands)
+        Interactive Revise Todos({len(todos)} commands)
+
+        Commands:
+         p, pick <commit> = use commit
+         r, reword <commit> = use commit, but edit the commit message
+         f, fixup <commit> = use commit, but fuse changes into previous commit
+         s, squash <commit> = like fixup, but also edit the commit message
+         c, cut <commit> = interactively split commit into two smaller commits
+         i, index <commit> = leave commit changes unstaged
+
+        Each command is prefixed by a '++' marker, and followed by the complete
+        commit message.
+
+        Commit messages will be reworded to match the text following them
+        before the command is performed.
+
+        If a command is removed, it will be treated like an 'index' line.
+
+        However, if you remove everything, these changes will be aborted.
+        """,
+    )
+
+    # Parse the response back into a list of steps
+    result = []
+    for full in re.split(br"^\+\+ ", response, flags=re.M)[1:]:
+        cmd, message = full.split(b"\n", maxsplit=1)
+
+        step = Step.parse(repo, cmd.decode(errors="replace").strip())
+        step.message = message.strip() + b"\n"
+        result.append(step)
+
+    validate_todos(todos, result)
+
+    return result
+
+
+def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]:
+    if msgedit:
+        return edit_todos_msgedit(repo, todos)
+
+    todos_text = b""
+    for step in todos:
+        todos_text += f"{step} {step.commit.summary()}\n".encode()
+
+    response = run_editor(
+        repo,
+        "git-revise-todo",
+        todos_text,
+        comments=f"""\
+        Interactive Revise Todos ({len(todos)} commands)
 
         Commands:
          p, pick <commit> = use commit
@@ -130,41 +215,20 @@ def edit_todos(repo: Repository, todos: List[Step]) -> List[Step]:
 
     # Parse the response back into a list of steps
     result = []
-    seen: Set[Oid] = set()
-    seen_index = False
     for line in response.splitlines():
         if line.isspace():
             continue
         step = Step.parse(repo, line.decode(errors="replace").strip())
         result.append(step)
 
-        # Produce diagnostics for duplicated commits.
-        if step.commit.oid in seen:
-            print(
-                f"(warning) Commit {step.commit} referenced multiple times",
-                file=sys.stderr,
-            )
-        seen.add(step.commit.oid)
-
-        if step.kind == StepKind.INDEX:
-            seen_index = True
-        elif seen_index:
-            raise ValueError("Non-index todo found after index todo")
-
-    # Produce diagnostics for missing and/or added commits.
-    before = set(s.commit.oid for s in todos)
-    after = set(s.commit.oid for s in result)
-    for oid in before - after:
-        print(f"(warning) commit {oid} missing from todo list", file=sys.stderr)
-    for oid in after - before:
-        print(f"(warning) commit {oid} not in original todo list", file=sys.stderr)
+    validate_todos(todos, result)
 
     return result
 
 
 def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> Commit:
     for step in todos:
-        rebased = step.commit.rebase(current)
+        rebased = step.commit.rebase(current).update(message=step.message)
         if step.kind == StepKind.PICK:
             current = rebased
         elif step.kind == StepKind.FIXUP:

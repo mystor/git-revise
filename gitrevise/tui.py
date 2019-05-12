@@ -3,7 +3,7 @@ from argparse import ArgumentParser, Namespace
 from subprocess import CalledProcessError
 import sys
 
-from .odb import Repository, Commit
+from .odb import Repository, Commit, Reference
 from .utils import (
     EditorError,
     commit_range,
@@ -36,6 +36,12 @@ def build_parser() -> ArgumentParser:
         action="store_true",
         help="Automatically apply fixup! and squash! commits to their targets",
     )
+    parser.add_argument(
+        "--edit",
+        "-e",
+        action="store_true",
+        help="edit commit message of targeted commit(s)",
+    )
 
     index_group = parser.add_mutually_exclusive_group()
     index_group.add_argument(
@@ -58,12 +64,6 @@ def build_parser() -> ArgumentParser:
         help="interactively edit commit stack",
     )
     mode_group.add_argument(
-        "--edit",
-        "-e",
-        action="store_true",
-        help="edit commit message of targeted commit",
-    )
-    mode_group.add_argument(
         "--message",
         "-m",
         action="append",
@@ -78,10 +78,10 @@ def build_parser() -> ArgumentParser:
     return parser
 
 
-def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
-    head = repo.get_commit_ref(args.ref)
-    if head.target is None:
-        raise ValueError("Invalid target reference")
+def interactive(
+    args: Namespace, repo: Repository, staged: Optional[Commit], head: Reference[Commit]
+):
+    assert head.target is not None
 
     if args.target is None:
         base, to_rebase = local_commits(repo, head.target)
@@ -96,20 +96,23 @@ def interactive(args: Namespace, repo: Repository, staged: Optional[Commit]):
         todos = autosquash_todos(todos)
 
     if args.interactive:
-        todos = edit_todos(repo, todos)
+        todos = edit_todos(repo, todos, msgedit=args.edit)
 
-    if original == todos:
-        print("(warning) no changes performed", file=sys.stderr)
-        return
+    if todos != original:
+        # Perform the todo list actions.
+        new_head = apply_todos(base, todos, reauthor=args.reauthor)
 
-    # Perform the todo list actions.
-    new_head = apply_todos(base, todos, reauthor=args.reauthor)
+        # Update the value of HEAD to the new state.
+        update_head(head, new_head, None)
+    else:
+        print(f"(warning) no changes performed", file=sys.stderr)
 
-    # Update the value of HEAD to the new state.
-    update_head(head, new_head, None)
 
+def noninteractive(
+    args: Namespace, repo: Repository, staged: Optional[Commit], head: Reference[Commit]
+):
+    assert head.target is not None
 
-def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
     if args.target is None:
         raise ValueError("<target> is a required argument")
 
@@ -157,26 +160,35 @@ def noninteractive(args: Namespace, repo: Repository, staged: Optional[Commit]):
         print(f"(warning) no changes performed", file=sys.stderr)
 
 
+def inner_main(args: Namespace, repo: Repository):
+    # If '-a' was specified, stage all changes.
+    if args.all:
+        repo.git("add", "-u")
+
+    # Create a commit with changes from the index
+    staged = None
+    if not args.no_index:
+        staged = repo.index.commit(message=b"<git index>")
+        if staged.tree() == staged.parent().tree():
+            staged = None  # No changes, ignore the commit
+
+    # Determine the HEAD reference which we're going to update.
+    head = repo.get_commit_ref(args.ref)
+    if head.target is None:
+        raise ValueError("Head reference not found!")
+
+    # Either enter the interactive or non-interactive codepath.
+    if args.interactive or args.autosquash:
+        interactive(args, repo, staged, head)
+    else:
+        noninteractive(args, repo, staged, head)
+
+
 def main(argv: Optional[List[str]] = None):
     args = build_parser().parse_args(argv)
     try:
         with Repository() as repo:
-            # If '-a' was specified, stage all changes.
-            if args.all:
-                repo.git("add", "-u")
-
-            # Create a commit with changes from the index
-            staged = (
-                None if args.no_index else repo.index.commit(message=b"<git index>")
-            )
-            if staged and staged.tree() == staged.parent().tree():
-                staged = None  # No changes, ignore the commit
-
-            # Either enter the interactive or non-interactive codepath.
-            if args.interactive or args.autosquash:
-                interactive(args, repo, staged)
-            else:
-                noninteractive(args, repo, staged)
+            inner_main(args, repo)
     except CalledProcessError as err:
         print(f"subprocess exited with non-zero status: {err.returncode}")
         exit(1)
