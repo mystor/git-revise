@@ -16,6 +16,7 @@ setup(
     author_email="nika@thelayzells.com",
     description="Efficiently update, split, and rearrange git commits",
     long_description=(HERE / "README.md").read_text(),
+    long_description_content_type='text/markdown',
     license="MIT",
     keywords="git revise rebase amend fixup",
     url="https://github.com/mystor/git-revise",
