@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Feb 22, 2019" "0.3.2" "git-revise"
+.TH "GIT-REVISE" "1" "Jun 02, 2019" "0.3.2" "git-revise"
 .SH NAME
 git-revise \- Efficiently update, split, and rearrange git commits
 .
@@ -67,7 +67,7 @@ Ignore staged changes in the index.
 .INDENT 0.0
 .TP
 .B \-\-reauthor
-Reset target commit\(aqs author to the current user.
+Reset target commit’s author to the current user.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -94,7 +94,7 @@ These commits are usually created with \fBgit commit \-\-fixup=<commit>\fP or
 line of its commit message.
 .sp
 This option can be combined with \fI\%\-\-interactive\fP to modify the
-generated todos before they\(aqre executed.
+generated todos before they’re executed.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -102,15 +102,19 @@ generated todos before they\(aqre executed.
 Interactively select hunks from <target>. The chosen hunks are split into
 a second commit immediately after the target.
 .sp
-After splitting is complete, both commit\(aqs messages are edited.
+After splitting is complete, both commit’s messages are edited.
 .sp
-See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
+See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B \-e, \-\-edit
-After applying staged changes, edit <target>\(aqs commit message.
+After applying staged changes, edit <target>’s commit message.
+.sp
+This option can be combined with \fI\%\-\-interactive\fP to allow editing
+of commit messages within the todo list. For more information on, see
+\fI\%INTERACTIVE MODE\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -152,7 +156,7 @@ modifying history on a repository that you share.
 \fBgit revise\fP supports an interactive mode inspired by the
 interactive mode of \fBgit\-rebase(1)\fP\&.
 .sp
-This mode is started with the last commit you want to retain "as\-is":
+This mode is started with the last commit you want to retain “as\-is”:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -183,6 +187,34 @@ index 672841329981 <git index>
 These commits may be re\-ordered to change the order they appear in history.
 In addition, the \fBpick\fP and \fBindex\fP commands may be replaced to modify
 their behaviour.
+.sp
+If \fI\%\-e\fP was specified, the full commit message will be included, and
+each command line will begin with a \fB++\fP\&. Any changes made to the commit
+messages in this file will be applied to the commit in question, allowing for
+simultaneous editing of commit messages during the todo editing phase.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+++ pick 8338dfa88912
+Oneline summary of first commit
+
+Body of first commit
+
+++ pick 735609912343
+Summary of second commit
+
+Body of second commit
+
+++ index 672841329981
+<git index>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The following commands are supported in all interactive modes:
 .INDENT 0.0
 .TP
 .B index
@@ -198,13 +230,13 @@ Use the given commit as\-is in history. When applied to the generated
 .INDENT 0.0
 .TP
 .B fixup
-Add the commit\(aqs changes into the previous commit, discarding it\(aqs commit
+Add the commit’s changes into the previous commit, discarding it’s commit
 message.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B squash
-Like fuse, but also open an editor to merge the commit\(aqs messages.
+Like fuse, but also open an editor to merge the commit’s messages.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -217,9 +249,9 @@ Open an eitor to modify the commit message.
 Interactively select hunks from the commit. The chosen hunks are split
 into a second commit immediately after it.
 .sp
-After splitting is complete, both commit\(aqs messages are edited.
+After splitting is complete, both commit’s messages are edited.
 .sp
-See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
+See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .SH REPORTING BUGS

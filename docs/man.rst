@@ -90,6 +90,10 @@ Main modes of operation
 
    After applying staged changes, edit <target>'s commit message.
 
+   This option can be combined with :option:`--interactive` to allow editing
+   of commit messages within the todo list. For more information on, see
+   :ref:`interactive-mode`.
+
 .. option:: -m <msg>, --message <msg>
 
    Use the given <msg> as the new commit message for <target>. If multiple
@@ -157,6 +161,28 @@ index>`` entry will also be present.
 These commits may be re-ordered to change the order they appear in history.
 In addition, the ``pick`` and ``index`` commands may be replaced to modify
 their behaviour.
+
+If :option:`-e` was specified, the full commit message will be included, and
+each command line will begin with a ``++``. Any changes made to the commit
+messages in this file will be applied to the commit in question, allowing for
+simultaneous editing of commit messages during the todo editing phase.
+
+.. code-block:: none
+
+    ++ pick 8338dfa88912
+    Oneline summary of first commit
+
+    Body of first commit
+
+    ++ pick 735609912343
+    Summary of second commit
+
+    Body of second commit
+
+    ++ index 672841329981
+    <git index>
+
+The following commands are supported in all interactive modes:
 
 .. describe:: index
 
