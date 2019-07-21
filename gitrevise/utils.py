@@ -5,7 +5,7 @@ import textwrap
 import sys
 import shlex
 
-from .odb import Repository, Commit, Tree, Oid, Reference, Index
+from .odb import Repository, Commit, Tree, Oid, Reference
 
 
 class EditorError(Exception):
@@ -151,24 +151,35 @@ def cut_commit(commit: Commit) -> Commit:
     """Perform a ``cut`` operation on the given commit, and return the
     modified commit."""
 
-    repo = commit.repo
+    print(f"Cutting commit {commit.oid.short()}")
+    print("Select changes to be included in part [1]:")
 
-    # Create an environment with an explicit index file.
-    index = Index(repo, repo.get_tempdir() / "TEMP_INDEX")
+    base_tree = commit.parent().tree()
+    final_tree = commit.tree()
 
-    # Read the target tree into a temporary index.
-    index.git("read-tree", commit.tree().persist().hex())
+    # Create an environment with an explicit index file and the base tree.
+    #
+    # NOTE: The use of `skip_worktree` is only necessary due to `git reset
+    # --patch` unnecessarily invoking `git update-cache --refresh`. Doing the
+    # extra work to set the bit greatly improves the speed of the unnecessary
+    # refresh operation.
+    index = base_tree.to_index(
+        commit.repo.get_tempdir() / "TEMP_INDEX", skip_worktree=True
+    )
 
     # Run an interactive git-reset to allow picking which pieces of the
-    # patch should go into which part.
-    index.git("reset", "--patch", commit.parent().persist().hex(), nocapture=True)
+    # patch should go into the first part.
+    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", nocapture=True)
 
     # Write out the newly created tree.
     mid_tree = index.tree()
 
     # Check if one or the other of the commits will be empty
-    if mid_tree == commit.parent().tree() or mid_tree == commit.tree():
-        raise ValueError("intermediate state not distinct from end states")
+    if mid_tree == base_tree:
+        raise ValueError("cut part [1] is empty - aborting")
+
+    if mid_tree == final_tree:
+        raise ValueError("cut part [2] is empty - aborting")
 
     # Build the first commit
     part1 = commit.update(tree=mid_tree, message=b"[1] " + commit.message)

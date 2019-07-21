@@ -637,6 +637,21 @@ class Tree(GitObj):
         for entry in self.entries.values():
             entry.persist()
 
+    def to_index(self, path: Path, skip_worktree: bool = False) -> "Index":
+        """Read tree into a temporary index. If skip_workdir is ``True``, every
+        entry in the index will have its "Skip Workdir" bit set."""
+
+        index = Index(self.repo, path)
+        self.repo.git("read-tree", "--index-output=" + str(path), self.persist().hex())
+
+        # If skip_worktree is set, mark every file as --skip-worktree.
+        if skip_worktree:
+            # XXX(nika): Could be done with a pipe, which might improve perf.
+            files = index.git("ls-files")
+            index.git("update-index", "--skip-worktree", "--stdin", stdin=files)
+
+        return index
+
     def __repr__(self) -> str:
         return f"<Tree {self.oid} ({len(self.entries)} entries)>"
 
