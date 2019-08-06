@@ -5,17 +5,17 @@
 
 
 `git revise` is a `git` subcommand to efficiently update, split, and rearrange
-commits. It is heavily inspired by `git rebase`, however tries to be more
+commits. It is heavily inspired by `git rebase`, however it tries to be more
 efficient and ergonomic for patch-stack oriented workflows.
 
-By default, `git revise` will apply staged changes to a target commit,
-updating `HEAD` to point at the revised history. It also supports splitting
-commits, and rewording commit messages.
+By default, `git revise` will apply staged changes to a target commit, then
+update `HEAD` to point at the revised history. It also supports splitting
+commits and rewording commit messages.
 
-Unlike `git-rebase`, `git revise` avoids modifying working directory and
-index state, performing all merges in-memory, and only writing them when
-necessary. This allows it to be significantly faster on large codebases, and
-avoid invalidating builds.
+Unlike `git rebase`, `git revise` avoids modifying the working directory or
+the index state, performing all merges in-memory and only writing them when
+necessary. This allows it to be significantly faster on large codebases and
+avoids unnecessarily invalidating builds.
 
 ## Install
 
