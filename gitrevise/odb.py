@@ -152,7 +152,7 @@ class Repository:
         self._tempdir = None
 
         self.workdir = Path(self.git("rev-parse", "--show-toplevel", cwd=cwd).decode())
-        self.gitdir = Path(self.git("rev-parse", "--git-dir").decode())
+        self.gitdir = self.workdir / Path(self.git("rev-parse", "--git-dir").decode())
 
         # XXX(nika): Does it make more sense to cache these or call every time?
         # Cache for length of time & invalidate?

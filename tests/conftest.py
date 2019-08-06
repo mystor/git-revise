@@ -65,7 +65,7 @@ def repo(tmp_path_factory, monkeypatch):
 def main(repo):
     # Run the main entry point for git-revise in a subprocess.
     def main(args, **kwargs):
-        kwargs["cwd"] = repo.workdir
+        kwargs.setdefault("cwd", repo.workdir)
         subprocess.run([sys.executable, "-m", "gitrevise", *args], **kwargs)
 
     return main

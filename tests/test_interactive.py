@@ -3,7 +3,7 @@
 import textwrap
 
 
-def test_interactive_reorder(repo, bash, main, fake_editor):
+def interactive_reorder_helper(repo, bash, main, fake_editor, cwd):
     bash(
         """
         echo "hello, world" > file1
@@ -44,7 +44,7 @@ def test_interactive_reorder(repo, bash, main, fake_editor):
         )
 
     with fake_editor(editor):
-        main(["-i", "HEAD~~"])
+        main(["-i", "HEAD~~"], cwd=cwd)
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()
@@ -62,6 +62,17 @@ def test_interactive_reorder(repo, bash, main, fake_editor):
     assert prev_u.tree().entries[b"file2"] == curr.tree().entries[b"file2"]
     assert prev_u.tree().entries[b"file1"] == curr_uu.tree().entries[b"file1"]
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
+
+
+def test_interactive_reorder(repo, bash, main, fake_editor):
+    interactive_reorder_helper(repo, bash, main, fake_editor, cwd=repo.workdir)
+
+
+def test_interactive_reorder_subdir(repo, bash, main, fake_editor):
+    bash("mkdir subdir")
+    interactive_reorder_helper(
+        repo, bash, main, fake_editor, cwd=repo.workdir / "subdir"
+    )
 
 
 def test_interactive_fixup(repo, bash, main, fake_editor):
