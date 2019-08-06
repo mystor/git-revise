@@ -127,7 +127,7 @@ A successful :command:`git revise` will add a single entry to the reflog,
 allowing it to be undone with ``git reset @{1}``. Unsuccessful :command:`git
 revise` commands will leave your repository largely unmodified.
 
-No marge commits may occur between the target commit and ``HEAD``, as
+No merge commits may occur between the target commit and ``HEAD``, as
 rewriting them is not supported.
 
 See :manpage:`git-rebase(1)` for more information on the implications of
