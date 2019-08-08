@@ -211,7 +211,7 @@ The following commands are supported in all interactive modes:
 
 .. describe:: reword
 
-   Open an eitor to modify the commit message.
+   Open an editor to modify the commit message.
 
 .. describe:: cut
 
