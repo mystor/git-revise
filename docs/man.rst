@@ -81,7 +81,7 @@ Main modes of operation
    Interactively select hunks from <target>. The chosen hunks are split into
    a second commit immediately after the target.
 
-   After splitting is complete, both commit's messages are edited.
+   After splitting is complete, both commits' messages are edited.
 
    See the "Interactive Mode" section of :manpage:`git-add(1)` to learn how
    to operate this mode.
@@ -202,12 +202,12 @@ The following commands are supported in all interactive modes:
 
 .. describe:: fixup
 
-   Add the commit's changes into the previous commit, discarding it's commit
+   Add the commit's changes into the previous commit, discarding its commit
    message.
 
 .. describe:: squash
 
-   Like fuse, but also open an editor to merge the commit's messages.
+   Like fixup, but also open an editor to merge the commits' messages.
 
 .. describe:: reword
 
@@ -218,7 +218,7 @@ The following commands are supported in all interactive modes:
    Interactively select hunks from the commit. The chosen hunks are split
    into a second commit immediately after it.
 
-   After splitting is complete, both commit's messages are edited.
+   After splitting is complete, both commits' messages are edited.
 
    See the "Interactive Mode" section of :manpage:`git-add(1)` to learn how
    to operate this mode.
