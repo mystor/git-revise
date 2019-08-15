@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from subprocess import run, CalledProcessError
+from subprocess import run, CalledProcessError, PIPE
 from pathlib import Path
 import textwrap
 import sys
@@ -57,8 +57,13 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
 
 def edit_file(path: Path) -> bytes:
     try:
+        editor = (
+            run(["git", "var", "GIT_EDITOR"], check=True, cwd=path.parent, stdout=PIPE)
+            .stdout.decode("utf-8")
+            .rstrip()
+        )
         run(
-            ["bash", "-c", f"exec $(git var GIT_EDITOR) {shlex.quote(path.name)}"],
+            ["bash", "-c", f"exec {editor} {shlex.quote(path.name)}"],
             check=True,
             cwd=path.parent,
         )
