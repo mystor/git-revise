@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from subprocess import run, CalledProcessError, PIPE
+from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
 import sys
