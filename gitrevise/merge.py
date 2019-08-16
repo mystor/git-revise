@@ -210,7 +210,7 @@ def merge_blobs(
         conflicts = tmpdir / "conflict" / path.relative_to("/")
         conflicts.parent.mkdir(parents=True, exist_ok=True)
         conflicts.write_bytes(err.output)
-        merged = edit_file(conflicts)
+        merged = edit_file(repo, conflicts)
 
         # Print warnings if the merge looks like it may have failed.
         if merged == err.output:

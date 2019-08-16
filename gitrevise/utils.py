@@ -3,7 +3,6 @@ from subprocess import run, CalledProcessError, PIPE
 from pathlib import Path
 import textwrap
 import sys
-import shlex
 
 from .odb import Repository, Commit, Tree, Oid, Reference
 
@@ -55,15 +54,11 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
     return base, commits
 
 
-def edit_file(path: Path) -> bytes:
+def edit_file(repo: Repository, path: Path) -> bytes:
     try:
-        editor = (
-            run(["git", "var", "GIT_EDITOR"], check=True, cwd=path.parent, stdout=PIPE)
-            .stdout.decode("utf-8")
-            .rstrip()
-        )
+        editor = repo.git("var", "GIT_EDITOR").decode()
         run(
-            ["bash", "-c", f"exec {editor} {shlex.quote(path.name)}"],
+            ["sh", "-c", f'{editor} "$@"', editor, path.name],
             check=True,
             cwd=path.parent,
         )
@@ -103,7 +98,7 @@ def run_editor(
                 handle.write(b"# " + comment.encode("utf-8") + b"\n")
 
     # Invoke the editor
-    data = edit_file(path)
+    data = edit_file(repo, path)
     if comments:
         data = strip_comments(data)
 
