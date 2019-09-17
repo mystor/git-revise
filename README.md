@@ -19,9 +19,18 @@ avoids unnecessarily invalidating builds.
 
 ## Install
 
+If you're a macOS Homebrew user, then you can install git-revise from Homebrew.
+
+```sh
+$ brew install git-revise
+```
+
+Else, you can always install git-revise using python's standard package-management system pip.
+
 ```sh
 $ pip install --user git-revise
 ```
+
 
 ## Documentation
 
