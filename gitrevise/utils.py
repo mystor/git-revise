@@ -67,10 +67,28 @@ def edit_file(repo: Repository, path: Path) -> bytes:
     return path.read_bytes()
 
 
-def strip_comments(data: bytes) -> bytes:
+def get_commentchar(repo: Repository, text: bytes) -> bytes:
+    commentchar = repo.config("core.commentchar", default=b"#")
+
+    if commentchar == b"auto":
+        firstchars = {
+            line.decode("utf-8")[0] for line in text.splitlines() if line != b""
+        }
+        try:
+            commentchar = next(c for c in "#;@!$%^&|:" if c not in firstchars).encode()
+        except StopIteration:
+            raise EditorError(
+                "unable to select a comment character that is not used\n"
+                + "in the current commit message"
+            )
+
+    return commentchar
+
+
+def strip_comments(data: bytes, commentchar: bytes) -> bytes:
     lines = b""
     for line in data.splitlines(keepends=True):
-        if not line.startswith(b"#"):
+        if not line.startswith(commentchar):
             lines += line
 
     lines = lines.rstrip()
@@ -88,6 +106,7 @@ def run_editor(
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
     path = repo.get_tempdir() / filename
+    commentchar = get_commentchar(repo, text)
     with open(path, "wb") as handle:
         for line in text.splitlines():
             handle.write(line + b"\n")
@@ -95,12 +114,12 @@ def run_editor(
         if comments:  # If comments were provided, write them after the text.
             handle.write(b"\n")
             for comment in textwrap.dedent(comments).splitlines():
-                handle.write(b"# " + comment.encode("utf-8") + b"\n")
+                handle.write(commentchar + b" " + comment.encode("utf-8") + b"\n")
 
     # Invoke the editor
     data = edit_file(repo, path)
     if comments:
-        data = strip_comments(data)
+        data = strip_comments(data, commentchar)
 
     # Produce an error if the file was empty
     if not (allow_empty or data):
