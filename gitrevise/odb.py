@@ -206,10 +206,7 @@ class Repository:
         return prog.stdout
 
     def config(
-        self,
-        setting: str,
-        config_type: Optional[str] = None,
-        default: bytes = b"",
+        self, setting: str, config_type: Optional[str] = None, default: bytes = b""
     ) -> bytes:
         cmd = []
         if config_type is not None:
