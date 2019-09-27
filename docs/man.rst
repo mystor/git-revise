@@ -114,16 +114,13 @@ Main modes of operation
 CONFIGURATION
 =============
 
-.. option:: revise.autoSquash
+Configuration is managed by :manpage:`git-config(1)`.
 
-   If set to true enable :option:`--autosquash` option by default. Only
-   applicable with :option:`--interactive`.
-   This setting overrides :option:`rebase.autoSquash`.
+.. gitconfig:: revise.autoSquash
 
-.. option:: rebase.autoSquash
-
-   When :option:`revise.autoSquash` is unset, standard git configuration
-   ``rebase.autoSquash`` is used as a fallback.
+   If set to true, imply :option:`--autosquash` whenever :option:`--interactive`
+   is specified. Overridden by :option:`--no-autosquash`. Defaults to false. If
+   not set, the value of ``rebase.autoSquash`` is used instead.
 
 
 CONFLICT RESOLUTION
