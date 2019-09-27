@@ -33,8 +33,16 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument(
         "--autosquash",
-        action="store_true",
-        help="Automatically apply fixup! and squash! commits to their targets",
+        action="store_const",
+        const=True,
+        help="automatically apply fixup! and squash! commits to their targets",
+    )
+    parser.add_argument(
+        "--no-autosquash",
+        action="store_const",
+        dest="autosquash",
+        const=False,
+        help="override and disable configuration settings revise.autoSquash and rebase.autoSquash",
     )
     parser.add_argument(
         "--edit",
@@ -92,7 +100,7 @@ def interactive(
     # Build up an initial todos list, edit that todos list.
     todos = original = build_todos(to_rebase, staged)
 
-    if args.autosquash:
+    if must_autosquash(args, repo):
         todos = autosquash_todos(todos)
 
     if args.interactive:
@@ -106,6 +114,18 @@ def interactive(
         update_head(head, new_head, None)
     else:
         print(f"(warning) no changes performed", file=sys.stderr)
+
+
+def must_autosquash(args: Namespace, repo: Repository):
+    if args.autosquash is not None:
+        return args.autosquash
+
+    revise_config = repo.config("revise.autosquash", config_type="bool")
+    if revise_config != b"":
+        return revise_config == b"true"
+
+    rebase_config = repo.config("rebase.autosquash", config_type="bool")
+    return rebase_config == b"true"
 
 
 def noninteractive(
