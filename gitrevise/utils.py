@@ -3,6 +3,8 @@ from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
 import sys
+import shlex
+import os
 
 from .odb import Repository, Commit, Tree, Oid, Reference
 
@@ -57,11 +59,16 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
 def edit_file(repo: Repository, path: Path) -> bytes:
     try:
         editor = repo.git("var", "GIT_EDITOR").decode()
-        run(
-            ["sh", "-c", f'{editor} "$@"', editor, path.name],
-            check=True,
-            cwd=path.parent,
-        )
+        if os.name == "nt":
+            # The popular "Git for Windows" distribution uses a bundled msys
+            # bash executable which is generally used to invoke GIT_EDITOR.
+            # Unfortunatly, there doesn't appear to be a way to find this
+            # executable as a python subcommand. Instead, attempt to parse the
+            # editor string ourselves. (#19)
+            cmd = shlex.split(editor, posix=True) + [path.name]
+        else:
+            cmd = ["sh", "-c", f'{editor} "$@"', editor, path.name]
+        run(cmd, check=True, cwd=path.parent)
     except CalledProcessError as err:
         raise EditorError(f"Editor exited with status {err}")
     return path.read_bytes()
