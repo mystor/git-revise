@@ -728,8 +728,11 @@ class Index:
 class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
     """A git reference"""
 
+    shortname: str
+    """Short unresolved reference name, e.g. 'HEAD' or 'master'"""
+
     name: str
-    """Git reference name, e.g. 'HEAD' or 'refs/heads/master'"""
+    """Resolved reference name, e.g. 'refs/tags/1.0.0' or 'refs/heads/master'"""
 
     target: Optional[GitObjT]
     """Referenced git object"""
@@ -744,7 +747,7 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
 
     def __init__(self, obj_type: Type[GitObjT], repo: Repository, name: str):
         self._type = obj_type
-        self.name = name
+        self.name = repo.git("rev-parse", "--symbolic-full-name", name).decode()
         self.repo = repo
         self.refresh()
 
