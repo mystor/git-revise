@@ -32,6 +32,9 @@ class MissingObject(Exception):
         Exception.__init__(self, f"Object {ref} does not exist")
 
 
+T = TypeVar("T")  # pylint: disable=invalid-name
+
+
 class Oid(bytes):
     """Git object identifier"""
 
@@ -205,17 +208,21 @@ class Repository:
             return prog.stdout[:-1]
         return prog.stdout
 
-    def config(
-        self, setting: str, config_type: Optional[str] = None, default: bytes = b""
-    ) -> bytes:
-        cmd = []
-        if config_type is not None:
-            # git version >= 2.19:
-            # cmd += ["--type", config_type]
-            # git version < 2.19:
-            cmd += ["--" + config_type]
+    def config(self, setting: str, default: T) -> Union[bytes, T]:
         try:
-            return self.git("config", "--get", *cmd, setting)
+            return self.git("config", "--get", setting)
+        except CalledProcessError:
+            return default
+
+    def bool_config(self, config: str, default: T) -> Union[bool, T]:
+        try:
+            return self.git("config", "--get", "--bool", config) == b"true"
+        except CalledProcessError:
+            return default
+
+    def int_config(self, config: str, default: T) -> Union[int, T]:
+        try:
+            return int(self.git("config", "--get", "--int", config))
         except CalledProcessError:
             return default
 

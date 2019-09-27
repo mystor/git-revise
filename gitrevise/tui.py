@@ -32,23 +32,22 @@ def build_parser() -> ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument(
-        "--autosquash",
-        action="store_const",
-        const=True,
-        help="automatically apply fixup! and squash! commits to their targets",
-    )
-    parser.add_argument(
-        "--no-autosquash",
-        action="store_const",
-        dest="autosquash",
-        const=False,
-        help="override and disable configuration settings revise.autoSquash and rebase.autoSquash",
-    )
-    parser.add_argument(
         "--edit",
         "-e",
         action="store_true",
         help="edit commit message of targeted commit(s)",
+    )
+
+    autosquash_group = parser.add_mutually_exclusive_group()
+    autosquash_group.add_argument(
+        "--autosquash",
+        action="store_true",
+        help="automatically apply fixup! and squash! commits to their targets",
+    )
+    autosquash_group.add_argument(
+        "--no-autosquash",
+        action="store_true",
+        help="force disable revise.autoSquash behaviour",
     )
 
     index_group = parser.add_mutually_exclusive_group()
@@ -100,7 +99,7 @@ def interactive(
     # Build up an initial todos list, edit that todos list.
     todos = original = build_todos(to_rebase, staged)
 
-    if must_autosquash(args, repo):
+    if enable_autosquash(args, repo):
         todos = autosquash_todos(todos)
 
     if args.interactive:
@@ -116,16 +115,16 @@ def interactive(
         print(f"(warning) no changes performed", file=sys.stderr)
 
 
-def must_autosquash(args: Namespace, repo: Repository):
-    if args.autosquash is not None:
-        return args.autosquash
+def enable_autosquash(args: Namespace, repo: Repository) -> bool:
+    if args.autosquash:
+        return True
+    if args.no_autosquash:
+        return False
 
-    revise_config = repo.config("revise.autosquash", config_type="bool")
-    if revise_config != b"":
-        return revise_config == b"true"
-
-    rebase_config = repo.config("rebase.autosquash", config_type="bool")
-    return rebase_config == b"true"
+    return repo.bool_config(
+        "revise.autoSquash",
+        default=repo.bool_config("rebase.autoSquash", default=False),
+    )
 
 
 def noninteractive(
