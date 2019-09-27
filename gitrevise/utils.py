@@ -68,20 +68,20 @@ def edit_file(repo: Repository, path: Path) -> bytes:
 
 
 def get_commentchar(repo: Repository, text: bytes) -> bytes:
-    commentchar = repo.config("core.commentchar", default=b"#")
-
+    commentchar = repo.config("core.commentChar", default=b"#")
     if commentchar == b"auto":
-        firstchars = {
-            line.decode("utf-8")[0] for line in text.splitlines() if line != b""
-        }
+        chars = bytearray(b"#;@!$%^&|:")
+        for line in text.splitlines():
+            try:
+                chars.remove(line[0])
+            except (ValueError, IndexError):
+                pass
         try:
-            commentchar = next(c for c in "#;@!$%^&|:" if c not in firstchars).encode()
-        except StopIteration:
-            raise EditorError(
-                "unable to select a comment character that is not used\n"
-                + "in the current commit message"
-            )
-
+            return chars[:1]
+        except IndexError:
+            raise EditorError("Unable to automatically select a comment character")
+    if commentchar == b"":
+        raise EditorError("core.commentChar must not be empty")
     return commentchar
 
 
