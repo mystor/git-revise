@@ -205,9 +205,20 @@ class Repository:
             return prog.stdout[:-1]
         return prog.stdout
 
-    def config(self, setting: str, default: bytes = b"") -> bytes:
+    def config(
+        self,
+        setting: str,
+        config_type: Optional[str] = None,
+        default: bytes = b"",
+    ) -> bytes:
+        cmd = []
+        if config_type is not None:
+            # git version >= 2.19:
+            # cmd += ["--type", config_type]
+            # git version < 2.19:
+            cmd += ["--" + config_type]
         try:
-            return self.git("config", setting)
+            return self.git("config", "--get", *cmd, setting)
         except CalledProcessError:
             return default
 

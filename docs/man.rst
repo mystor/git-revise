@@ -62,7 +62,7 @@ Main modes of operation
    Rather than applying staged changes to <target>, edit a todo list of
    actions to perform on commits after <target>. See :ref:`interactive-mode`.
 
-.. option:: --autosquash
+.. option:: --autosquash, --no-autosquash
 
    Rather than directly applying staged changes to <target>, automatically
    perform fixup or squash actions marked with ``fixup!`` or ``squash!``
@@ -75,6 +75,10 @@ Main modes of operation
 
    This option can be combined with :option:`--interactive` to modify the
    generated todos before they're executed.
+
+   If the :option:`--autosquash` option is enabled by default using a
+   configuration variable, the option :option:`--no-autosquash` can be used
+   to override and disable this setting. See :ref:`configuration`.
 
 .. option:: -c, --cut
 
@@ -103,6 +107,23 @@ Main modes of operation
 .. option:: --version
 
    Print version information and exit.
+
+
+.. _configuration:
+
+CONFIGURATION
+=============
+
+.. option:: revise.autoSquash
+
+   If set to true enable :option:`--autosquash` option by default. Only
+   applicable with :option:`--interactive`.
+   This setting overrides :option:`rebase.autoSquash`.
+
+.. option:: rebase.autoSquash
+
+   When :option:`revise.autoSquash` is unset, standard git configuration
+   ``rebase.autoSquash`` is used as a fallback.
 
 
 CONFLICT RESOLUTION
