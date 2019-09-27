@@ -191,13 +191,13 @@ def main(argv: Optional[List[str]] = None):
             inner_main(args, repo)
     except CalledProcessError as err:
         print(f"subprocess exited with non-zero status: {err.returncode}")
-        exit(1)
+        sys.exit(1)
     except EditorError as err:
         print(f"editor error: {err}")
-        exit(1)
+        sys.exit(1)
     except MergeConflict as err:
         print(f"merge conflict: {err}")
-        exit(1)
+        sys.exit(1)
     except ValueError as err:
         print(f"invalid value: {err}")
-        exit(1)
+        sys.exit(1)

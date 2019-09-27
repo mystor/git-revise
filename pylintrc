@@ -9,4 +9,8 @@ disable=
     too-few-public-methods,
     too-many-instance-attributes,
     cyclic-import,
-    fixme
+    fixme,
+
+    # Currently broken analyses which are also handled (better) by mypy
+    class-variable-slots-conflict,
+    no-member
