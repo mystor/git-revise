@@ -20,7 +20,7 @@ from typing import (
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
-from subprocess import Popen, run, PIPE
+from subprocess import Popen, run, PIPE, CalledProcessError
 from collections import defaultdict
 from tempfile import TemporaryDirectory
 
@@ -205,14 +205,11 @@ class Repository:
             return prog.stdout[:-1]
         return prog.stdout
 
-    def config(self, setting: str, default: Optional[bytes] = None) -> bytes:
-        cwd = getattr(self, "workdir", None)
-        cmd = ["git", "config", setting]
-        prog = run(cmd, cwd=cwd, check=False, stdout=PIPE)
-
-        if prog.returncode == 1:
-            return default if default is not None else b""
-        return prog.stdout[:-1]
+    def config(self, setting: str, default: bytes = b"") -> bytes:
+        try:
+            return self.git("config", setting)
+        except CalledProcessError:
+            return default
 
     def __enter__(self) -> "Repository":
         return self
