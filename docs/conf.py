@@ -120,3 +120,7 @@ man_pages = [
 ]
 
 # -- Extension configuration -------------------------------------------------
+
+
+def setup(app):
+    app.add_object_type("gitconfig", "gitconfig", objname="git config value")
