@@ -31,14 +31,6 @@ with urlopen('http://127.0.0.1:8190/', data=path.read_bytes(), timeout=5) as r:
 path.write_bytes(data)
 """
 EDITOR_COMMAND = " ".join(shlex.quote(p) for p in (sys.executable, "-c", EDITOR_SCRIPT))
-GITCONFIG = """\
-[core]
-    eol = lf
-    autocrlf = input
-[user]
-    email = test@example.com
-    name = Test User
-"""
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +48,18 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
 
     # Install known configuration
     gitconfig = home / ".gitconfig"
-    gitconfig.write_bytes(textwrap.dedent(GITCONFIG).encode())
+    gitconfig.write_bytes(
+        textwrap.dedent(
+            """\
+            [core]
+                eol = lf
+                autocrlf = input
+            [user]
+                email = test@example.com
+                name = Test User
+            """
+        ).encode()
+    )
 
     # Install our fake editor
     monkeypatch.setenv("GIT_EDITOR", EDITOR_COMMAND)
@@ -210,24 +213,8 @@ class Editor(HTTPServer):
         assert self.current
         return self.current
 
-    def get(self):
-        edit = self.next_file()
-        assert self.current == edit
-        return edit.indata
-
-    def put(self, value):
-        assert self.current
-        self.current.send_editor_reply(200, value)
-        assert self.current is None
-        assert self.handle_thread is None
-
     def is_idle(self):
         return self.handle_thread is None and self.current is None
-
-    def close(self):
-        self.server_close()
-        if self.current:
-            self.current.send_editor_reply(500, b"editor server was shut down")
 
     def __enter__(self):
         return self
@@ -238,4 +225,6 @@ class Editor(HTTPServer):
             if etype is None:
                 assert self.is_idle()
         finally:
-            self.close()
+            self.server_close()
+            if self.current:
+                self.current.send_editor_reply(500, b"editor server was shut down")
