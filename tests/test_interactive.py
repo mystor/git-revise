@@ -1,6 +1,7 @@
 # pylint: skip-file
 
 import textwrap
+import pytest
 
 
 def interactive_reorder_helper(repo, bash, main, fake_editor, cwd):
@@ -158,7 +159,19 @@ def test_interactive_fixup(repo, bash, main, fake_editor):
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
 
 
-def interactive_autosquash_setup_repo(bash):
+@pytest.mark.parametrize(
+    "rebase_config,revise_config,expected",
+    [
+        (None, None, False),
+        ("1", "0", False),
+        ("0", "1", True),
+        ("1", None, True),
+        (None, "1", True),
+    ],
+)
+def test_autosquash_config(
+    repo, bash, main, fake_editor, rebase_config, revise_config, expected
+):
     bash(
         """
         echo "hello, world" > file1
@@ -179,82 +192,46 @@ def interactive_autosquash_setup_repo(bash):
         """
     )
 
+    if rebase_config is not None:
+        bash(f"git config rebase.autoSquash '{rebase_config}'")
+    if revise_config is not None:
+        bash(f"git config revise.autoSquash '{revise_config}'")
 
-def interactive_helper_check_helper(extra_arg, repo, main, fake_editor, expected_msg):
-    def editor(inq, outq):
-        in_todo = inq.get()
+    head = repo.get_commit("HEAD")
+    headu = head.parent()
+    headuu = headu.parent()
 
-        # Get the index tree to check it
-        index = repo.index.commit()
+    disabled = textwrap.dedent(
+        f"""\
+        pick {headuu.oid.short()} commit two
+        pick {headu.oid.short()} commit three
+        pick {head.oid.short()} fixup! commit two
 
-        expected = textwrap.dedent(expected_msg).encode()
-        assert in_todo.startswith(expected)
-
-        outq.put(b"")
-
-    with fake_editor(editor):
-        main(["-i", extra_arg, "HEAD~~~"])
-
-
-def interactive_helper_check_autosquash(extra_arg, repo, main, fake_editor):
-    prev = repo.get_commit("HEAD")
-    expected = f"""\
-                pick {prev.parent().parent().oid.short()} commit two
-                fixup {prev.oid.short()} fixup! commit two
-                pick {prev.parent().oid.short()} commit three
-                """
-    interactive_helper_check_helper(extra_arg, repo, main, fake_editor, expected)
-
-
-def interactive_helper_check_no_autosquash(extra_arg, repo, main, fake_editor):
-    prev = repo.get_commit("HEAD")
-    expected = f"""\
-                pick {prev.parent().parent().oid.short()} commit two
-                pick {prev.parent().oid.short()} commit three
-                pick {prev.oid.short()} fixup! commit two
-                """
-    interactive_helper_check_helper(extra_arg, repo, main, fake_editor, expected)
-
-
-def test_interactive_default_noautosquash_fixup(repo, bash, main, fake_editor):
-    interactive_autosquash_setup_repo(bash)
-    bash(
         """
-        git config revise.autosquash 0
-        git config rebase.autosquash 1
-        """
-    )
-    interactive_helper_check_autosquash("--autosquash", repo, main, fake_editor)
-    interactive_helper_check_no_autosquash("--no-autosquash", repo, main, fake_editor)
-    interactive_helper_check_no_autosquash("", repo, main, fake_editor)
+    ).encode()
+    enabled = textwrap.dedent(
+        f"""\
+        pick {headuu.oid.short()} commit two
+        fixup {head.oid.short()} fixup! commit two
+        pick {headu.oid.short()} commit three
 
+        """
+    ).encode()
 
-def test_interactive_default_autosquash_fixup(repo, bash, main, fake_editor):
-    interactive_autosquash_setup_repo(bash)
-    bash(
-        """
-        git config revise.autosquash 1
-        git config rebase.autosquash 0
-        """
-    )
-    interactive_helper_check_autosquash("--autosquash", repo, main, fake_editor)
-    interactive_helper_check_no_autosquash("--no-autosquash", repo, main, fake_editor)
-    interactive_helper_check_autosquash("", repo, main, fake_editor)
+    def subtest(args, expected_todos):
+        def editor(inq, outq):
+            in_todo = inq.get()
+            assert in_todo.startswith(expected_todos)
+            outq.put(disabled)  # ensure repo state is unchanged
 
+        with fake_editor(editor):
+            main(args + ["-i", "HEAD~3"])
 
-def test_interactive_default_fallback_autosquash_fixup(repo, bash, main, fake_editor):
-    interactive_autosquash_setup_repo(bash)
-    # if revise.autosquash is set globally, this test fails
-    # - if set to false, the test fails
-    # - if set to true, the test doesn't actually test the fallback mechanism
-    bash(
-        """
-        git config rebase.autosquash 1
-        """
-    )
-    interactive_helper_check_autosquash("--autosquash", repo, main, fake_editor)
-    interactive_helper_check_no_autosquash("--no-autosquash", repo, main, fake_editor)
-    interactive_helper_check_autosquash("", repo, main, fake_editor)
+        assert repo.get_commit("HEAD") == head
+
+    subtest([], enabled if expected else disabled)
+    subtest(["--autosquash"], enabled)
+    subtest(["--no-autosquash"], disabled)
 
 
 def test_interactive_reword(repo, bash, main, fake_editor):
