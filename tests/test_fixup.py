@@ -1,6 +1,7 @@
 # pylint: skip-file
 
 from conftest import *
+import os
 
 
 def fixup_helper(repo, bash, main, flags, target, message=None):
@@ -107,27 +108,27 @@ def test_fixup_nonhead_conflict(repo, bash, main):
     with Editor() as ed, in_parallel(main, ["HEAD~"], input=b"y\ny\ny\ny\n"):
         with ed.next_file() as f:
             assert f.equals_dedent(
-                """\
-                <<<<<<< /file1 (new parent)
+                f"""\
+                <<<<<<< {os.sep}file1 (new parent)
                 Hello, World!
 
                 =======
                 conflict
-                >>>>>>> /file1 (incoming)
+                >>>>>>> {os.sep}file1 (incoming)
                 """
             )
             f.replace_dedent("conflict1\n")
 
         with ed.next_file() as f:
             assert f.equals_dedent(
-                """\
-                <<<<<<< /file1 (new parent)
+                f"""\
+                <<<<<<< {os.sep}file1 (new parent)
                 conflict1
                 =======
                 Hello, World!
                 Oops, gotta add a new line!
 
-                >>>>>>> /file1 (incoming)
+                >>>>>>> {os.sep}file1 (incoming)
                 """
             )
             f.replace_dedent("conflict2\n")
