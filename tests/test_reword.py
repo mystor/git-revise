@@ -34,7 +34,7 @@ def test_reword(repo, target, use_editor):
     assert old.persisted
 
     if use_editor:
-        with Editor() as ed, in_parallel(main, ["--no-index", "-e", target]):
+        with editor_main(["--no-index", "-e", target]) as ed:
             with ed.next_file() as f:
                 assert f.startswith(old.message)
                 f.replace_dedent(message)

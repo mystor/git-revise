@@ -111,7 +111,7 @@ def test_fixup_nonhead_conflict(basic_repo):
     old = basic_repo.get_commit("HEAD~")
     assert old.persisted
 
-    with Editor() as ed, in_parallel(main, ["HEAD~"], input=b"y\ny\ny\ny\n"):
+    with editor_main(["HEAD~"], input=b"y\ny\ny\ny\n") as ed:
         with ed.next_file() as f:
             assert f.equals_dedent(
                 f"""\

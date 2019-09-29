@@ -26,7 +26,7 @@ def interactive_reorder_helper(repo, cwd):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    with Editor() as ed, in_parallel(main, ["-i", "HEAD~~"], cwd=cwd):
+    with editor_main(["-i", "HEAD~~"], cwd=cwd) as ed:
         with ed.next_file() as f:
             assert f.startswith_dedent(
                 f"""\
@@ -94,7 +94,7 @@ def test_interactive_fixup(repo):
 
     index_tree = repo.index.tree()
 
-    with Editor() as ed, in_parallel(main, ["-i", "HEAD~~"]):
+    with editor_main(["-i", "HEAD~~"]) as ed:
         with ed.next_file() as f:
             index = repo.index.commit()
 
@@ -196,7 +196,7 @@ def test_autosquash_config(repo, rebase_config, revise_config, expected):
         """
 
     def subtest(args, expected_todos):
-        with Editor() as ed, in_parallel(main, args + ["-i", "HEAD~3"]):
+        with editor_main(args + ["-i", "HEAD~3"]) as ed:
             with ed.next_file() as f:
                 assert f.startswith_dedent(expected_todos)
                 f.replace_dedent(disabled)  # don't mutate state
@@ -229,7 +229,7 @@ def test_interactive_reword(repo):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    with Editor() as ed, in_parallel(main, ["-ie", "HEAD~~"]):
+    with editor_main(["-ie", "HEAD~~"]) as ed:
         with ed.next_file() as f:
             assert f.startswith_dedent(
                 f"""\

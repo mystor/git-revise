@@ -120,6 +120,12 @@ def main(args, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
+@contextmanager
+def editor_main(args, **kwargs):
+    with Editor() as ed, in_parallel(main, args, **kwargs):
+        yield ed
+
+
 class EditorFile(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.response_ready = Event()

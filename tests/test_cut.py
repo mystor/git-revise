@@ -25,7 +25,7 @@ def test_cut(repo):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    with Editor() as ed, in_parallel(main, ["--cut", "HEAD~"], input=b"y\nn\n"):
+    with editor_main(["--cut", "HEAD~"], input=b"y\nn\n") as ed:
         with ed.next_file() as f:
             assert f.startswith_dedent("[1] commit 2\n")
             f.replace_dedent("part 1\n")
