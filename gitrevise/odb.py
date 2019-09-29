@@ -238,6 +238,9 @@ class Repository:
         if self._tempdir:
             self._tempdir.__exit__(exc_type, exc_val, exc_tb)
 
+        self._catfile.terminate()
+        self._catfile.wait()
+
     def get_tempdir(self) -> Path:
         """Return a temporary directory to use for modifications to this repository"""
         if self._tempdir is None:

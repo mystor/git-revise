@@ -82,7 +82,8 @@ def repo(tmp_path_factory, monkeypatch):
 
     workdir = tmp_path_factory.mktemp("repo")
     subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
-    return WrappedRepo(workdir)
+    with WrappedRepo(workdir) as repo:
+        yield repo
 
 
 @pytest.fixture
