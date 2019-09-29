@@ -1,5 +1,7 @@
 # pylint: skip-file
 
+from conftest import *
+
 
 def fixup_helper(repo, bash, main, flags, target, message=None):
     old = repo.get_commit(target)
@@ -64,35 +66,35 @@ def test_fixup_nonhead_msg(repo, bash, main):
     )
 
 
-def test_fixup_head_editor(repo, bash, main, fake_editor):
+def test_fixup_head_editor(repo, bash, main):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
     newmsg = "fixup_head_editor test\n\nanother line\n"
 
-    def editor(inq, outq):
-        assert inq.get().startswith(old.message)
-        outq.put(newmsg.encode())
+    with Editor() as ed, in_parallel(
+        fixup_helper, repo, bash, main, ["-e"], "HEAD", newmsg
+    ):
+        with ed.next_file() as f:
+            assert f.startswith(old.message)
+            f.replace_dedent(newmsg)
 
-    with fake_editor(editor):
-        fixup_helper(repo, bash, main, ["-e"], "HEAD", newmsg)
 
-
-def test_fixup_nonhead_editor(repo, bash, main, fake_editor):
+def test_fixup_nonhead_editor(repo, bash, main):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
     newmsg = "fixup_nonhead_editor test\n\nanother line\n"
 
-    def editor(inq, outq):
-        assert inq.get().startswith(old.message)
-        outq.put(newmsg.encode())
+    with Editor() as ed, in_parallel(
+        fixup_helper, repo, bash, main, ["-e"], "HEAD~", newmsg
+    ):
+        with ed.next_file() as f:
+            assert f.startswith(old.message)
+            f.replace_dedent(newmsg)
 
-    with fake_editor(editor):
-        fixup_helper(repo, bash, main, ["-e"], "HEAD~", newmsg)
 
-
-def test_fixup_nonhead_conflict(repo, bash, main, fake_editor):
+def test_fixup_nonhead_conflict(repo, bash, main):
     import textwrap
 
     repo.load_template("basic")
@@ -102,9 +104,9 @@ def test_fixup_nonhead_conflict(repo, bash, main, fake_editor):
     old = repo.get_commit("HEAD~")
     assert old.persisted
 
-    def editor(inq, outq):
-        assert (
-            textwrap.dedent(
+    with Editor() as ed, in_parallel(main, ["HEAD~"], input=b"y\ny\ny\ny\n"):
+        with ed.next_file() as f:
+            assert f.equals_dedent(
                 """\
                 <<<<<<< /file1 (new parent)
                 Hello, World!
@@ -113,13 +115,11 @@ def test_fixup_nonhead_conflict(repo, bash, main, fake_editor):
                 conflict
                 >>>>>>> /file1 (incoming)
                 """
-            ).encode()
-            == inq.get()
-        )
-        outq.put(b"conflict1\n")
+            )
+            f.replace_dedent("conflict1\n")
 
-        assert (
-            textwrap.dedent(
+        with ed.next_file() as f:
+            assert f.equals_dedent(
                 """\
                 <<<<<<< /file1 (new parent)
                 conflict1
@@ -129,17 +129,12 @@ def test_fixup_nonhead_conflict(repo, bash, main, fake_editor):
 
                 >>>>>>> /file1 (incoming)
                 """
-            ).encode()
-            == inq.get()
-        )
-        outq.put(b"conflict2\n")
+            )
+            f.replace_dedent("conflict2\n")
 
-    with fake_editor(editor):
-        main(["HEAD~"], input=b"y\ny\ny\ny\n")
-
-        new = repo.get_commit("HEAD~")
-        assert new.persisted
-        assert new != old
+    new = repo.get_commit("HEAD~")
+    assert new.persisted
+    assert new != old
 
 
 def test_autosquash_nonhead(repo, bash, main):

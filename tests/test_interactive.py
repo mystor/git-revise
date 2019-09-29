@@ -2,9 +2,10 @@
 
 import textwrap
 import pytest
+from conftest import *
 
 
-def interactive_reorder_helper(repo, bash, main, fake_editor, cwd):
+def interactive_reorder_helper(repo, bash, main, cwd):
     bash(
         """
         echo "hello, world" > file1
@@ -25,27 +26,20 @@ def interactive_reorder_helper(repo, bash, main, fake_editor, cwd):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    def editor(inq, outq):
-        in_todo = inq.get()
-        expected = textwrap.dedent(
-            f"""\
-            pick {prev.parent().oid.short()} commit two
-            pick {prev.oid.short()} commit three
-            """
-        ).encode()
-        assert in_todo.startswith(expected)
-
-        outq.put(
-            textwrap.dedent(
+    with Editor() as ed, in_parallel(main, ["-i", "HEAD~~"], cwd=cwd):
+        with ed.next_file() as f:
+            assert f.startswith_dedent(
+                f"""\
+                pick {prev.parent().oid.short()} commit two
+                pick {prev.oid.short()} commit three
+                """
+            )
+            f.replace_dedent(
                 f"""\
                 pick {prev.oid.short()} commit three
                 pick {prev.parent().oid.short()} commit two
                 """
-            ).encode()
-        )
-
-    with fake_editor(editor):
-        main(["-i", "HEAD~~"], cwd=cwd)
+            )
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()
@@ -65,18 +59,16 @@ def interactive_reorder_helper(repo, bash, main, fake_editor, cwd):
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
 
 
-def test_interactive_reorder(repo, bash, main, fake_editor):
-    interactive_reorder_helper(repo, bash, main, fake_editor, cwd=repo.workdir)
+def test_interactive_reorder(repo, bash, main):
+    interactive_reorder_helper(repo, bash, main, cwd=repo.workdir)
 
 
-def test_interactive_reorder_subdir(repo, bash, main, fake_editor):
+def test_interactive_reorder_subdir(repo, bash, main):
     bash("mkdir subdir")
-    interactive_reorder_helper(
-        repo, bash, main, fake_editor, cwd=repo.workdir / "subdir"
-    )
+    interactive_reorder_helper(repo, bash, main, cwd=repo.workdir / "subdir")
 
 
-def test_interactive_fixup(repo, bash, main, fake_editor):
+def test_interactive_fixup(repo, bash, main):
     bash(
         """
         echo "hello, world" > file1
@@ -102,33 +94,24 @@ def test_interactive_fixup(repo, bash, main, fake_editor):
 
     index_tree = repo.index.tree()
 
-    def editor(inq, outq):
-        in_todo = inq.get()
+    with Editor() as ed, in_parallel(main, ["-i", "HEAD~~"]):
+        with ed.next_file() as f:
+            index = repo.index.commit()
 
-        # Get the index tree to check it
-        index = repo.index.commit()
-
-        expected = textwrap.dedent(
-            f"""\
-            pick {prev.parent().oid.short()} commit two
-            pick {prev.oid.short()} commit three
-            index {index.oid.short()} <git index>
-            """
-        ).encode()
-        assert in_todo.startswith(expected)
-
-        outq.put(
-            textwrap.dedent(
+            assert f.startswith_dedent(
+                f"""\
+                pick {prev.parent().oid.short()} commit two
+                pick {prev.oid.short()} commit three
+                index {index.oid.short()} <git index>
+                """
+            )
+            f.replace_dedent(
                 f"""\
                 pick {prev.oid.short()} commit three
                 fixup {index.oid.short()} <git index>
                 pick {prev.parent().oid.short()} commit two
                 """
-            ).encode()
-        )
-
-    with fake_editor(editor):
-        main(["-i", "HEAD~~"])
+            )
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()
@@ -169,9 +152,7 @@ def test_interactive_fixup(repo, bash, main, fake_editor):
         (None, "1", True),
     ],
 )
-def test_autosquash_config(
-    repo, bash, main, fake_editor, rebase_config, revise_config, expected
-):
+def test_autosquash_config(repo, bash, main, rebase_config, revise_config, expected):
     bash(
         """
         echo "hello, world" > file1
@@ -201,31 +182,24 @@ def test_autosquash_config(
     headu = head.parent()
     headuu = headu.parent()
 
-    disabled = textwrap.dedent(
-        f"""\
+    disabled = f"""\
         pick {headuu.oid.short()} commit two
         pick {headu.oid.short()} commit three
         pick {head.oid.short()} fixup! commit two
 
         """
-    ).encode()
-    enabled = textwrap.dedent(
-        f"""\
+    enabled = f"""\
         pick {headuu.oid.short()} commit two
         fixup {head.oid.short()} fixup! commit two
         pick {headu.oid.short()} commit three
 
         """
-    ).encode()
 
     def subtest(args, expected_todos):
-        def editor(inq, outq):
-            in_todo = inq.get()
-            assert in_todo.startswith(expected_todos)
-            outq.put(disabled)  # ensure repo state is unchanged
-
-        with fake_editor(editor):
-            main(args + ["-i", "HEAD~3"])
+        with Editor() as ed, in_parallel(main, args + ["-i", "HEAD~3"]):
+            with ed.next_file() as f:
+                assert f.startswith_dedent(expected_todos)
+                f.replace_dedent(disabled)  # don't mutate state
 
         assert repo.get_commit("HEAD") == head
 
@@ -234,7 +208,7 @@ def test_autosquash_config(
     subtest(["--no-autosquash"], disabled)
 
 
-def test_interactive_reword(repo, bash, main, fake_editor):
+def test_interactive_reword(repo, bash, main):
     bash(
         """
         echo "hello, world" > file1
@@ -255,25 +229,22 @@ def test_interactive_reword(repo, bash, main, fake_editor):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    def editor(inq, outq):
-        in_todo = inq.get()
-        expected = textwrap.dedent(
-            f"""\
-            ++ pick {prev.parent().oid.short()}
-            commit two
+    with Editor() as ed, in_parallel(main, ["-ie", "HEAD~~"]):
+        with ed.next_file() as f:
+            assert f.startswith_dedent(
+                f"""\
+                ++ pick {prev.parent().oid.short()}
+                commit two
 
-            extended2
+                extended2
 
-            ++ pick {prev.oid.short()}
-            commit three
+                ++ pick {prev.oid.short()}
+                commit three
 
-            extended3
-            """
-        ).encode()
-        assert in_todo.startswith(expected)
-
-        outq.put(
-            textwrap.dedent(
+                extended3
+                """
+            )
+            f.replace_dedent(
                 f"""\
                 ++ pick {prev.oid.short()}
                 updated commit three
@@ -285,11 +256,7 @@ def test_interactive_reword(repo, bash, main, fake_editor):
 
                 extended2 updated
                 """
-            ).encode()
-        )
-
-    with fake_editor(editor):
-        main(["-ie", "HEAD~~"])
+            )
 
     curr = repo.get_commit("HEAD")
     curr_u = curr.parent()

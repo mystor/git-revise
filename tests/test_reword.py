@@ -1,9 +1,14 @@
 # pylint: skip-file
 
+import textwrap
+from conftest import *
+
 
 def reword_helper(repo, main, flags, target, message):
+    message = textwrap.dedent(message).encode()
+
     old = repo.get_commit(target)
-    assert old.message != message.encode()
+    assert old.message != message
     assert old.persisted
 
     main(flags + [target])
@@ -13,7 +18,7 @@ def reword_helper(repo, main, flags, target, message):
     assert old.tree() == new.tree(), "tree is unchanged"
     assert old.parents() == new.parents(), "parents are unchanged"
 
-    assert new.message == message.encode(), "message set correctly"
+    assert new.message == message, "message set correctly"
     assert new.persisted, "commit persisted to disk"
     assert new.author == old.author, "author is unchanged"
     assert new.committer == repo.default_committer, "committer is updated"
@@ -41,42 +46,40 @@ def test_reword_nonhead(repo, main):
     )
 
 
-def test_reword_head_editor(repo, main, fake_editor):
+def test_reword_head_editor(repo, main):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD")
+    new_message = """\
+        reword_head_editor test
 
-    def editor(inq, outq):
-        assert inq.get().startswith(old.message)
-        outq.put(b"reword_head_editor test\n\nanother line\n")
+        another line
+        """
 
-    with fake_editor(editor):
-        reword_helper(
-            repo,
-            main,
-            ["--no-index", "-e"],
-            "HEAD",
-            "reword_head_editor test\n\nanother line\n",
-        )
+    with Editor() as ed, in_parallel(
+        reword_helper, repo, main, ["--no-index", "-e"], "HEAD", new_message
+    ):
+        with ed.next_file() as f:
+            assert f.startswith(old.message)
+            f.replace_dedent(new_message)
 
 
-def test_reword_nonhead_editor(repo, main, fake_editor):
+def test_reword_nonhead_editor(repo, main):
     repo.load_template("basic")
 
     old = repo.get_commit("HEAD~")
+    new_message = """\
+        reword_nonhead_editor test
 
-    def editor(inq, outq):
-        assert inq.get().startswith(old.message)
-        outq.put(b"reword_nonhead_editor test\n\nanother line\n")
+        another line
+        """
 
-    with fake_editor(editor):
-        reword_helper(
-            repo,
-            main,
-            ["--no-index", "-e"],
-            "HEAD~",
-            "reword_nonhead_editor test\n\nanother line\n",
-        )
+    with Editor() as ed, in_parallel(
+        reword_helper, repo, main, ["--no-index", "-e"], "HEAD~", new_message
+    ):
+        with ed.next_file() as f:
+            assert f.startswith(old.message)
+            f.replace_dedent(new_message)
 
 
 def test_reword_root(repo, main, bash):
