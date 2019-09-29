@@ -17,6 +17,54 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
 RESOURCES = Path(__file__).parent / "resources"
+EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
+EDITOR_SCRIPT = """\
+import sys
+from pathlib import Path
+from urllib.request import urlopen
+
+path = Path(sys.argv[1]).resolve()
+with urlopen('http://127.0.0.1:8190/', data=path.read_bytes(), timeout=5) as r:
+    length = int(r.headers.get('content-length'))
+    data = r.read(length)
+    if r.status != 200:
+        raise Exception(data.decode())
+path.write_bytes(data)
+"""
+EDITOR_COMMAND = " ".join(shlex.quote(p) for p in (sys.executable, "-c", EDITOR_SCRIPT))
+GITCONFIG = """\
+[core]
+    eol = lf
+    autocrlf = input
+[user]
+    email = test@example.com
+    name = Test User
+"""
+
+
+@pytest.fixture(autouse=True)
+def hermetic_seal(tmp_path_factory, monkeypatch):
+    # Lock down user git configuration
+    home = tmp_path_factory.mktemp("home")
+    xdg_config_home = home / ".config"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "true")
+
+    # Lock down commit/authoring time
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "1500000000 -0500")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "1500000000 -0500")
+
+    # Install known configuration
+    gitconfig = home / ".gitconfig"
+    gitconfig.write_bytes(textwrap.dedent(GITCONFIG).encode())
+
+    # Install our fake editor
+    monkeypatch.setenv("GIT_EDITOR", EDITOR_COMMAND)
+
+    # Switch into a test workdir
+    workdir = tmp_path_factory.mktemp("cwd")
+    monkeypatch.chdir(workdir)
 
 
 @contextmanager
@@ -74,12 +122,7 @@ class WrappedRepo(Repository):
 
 
 @pytest.fixture
-def repo(tmp_path_factory, monkeypatch):
-    # Create a working directory, and start the repository in it.
-    # We also change into a different temporary directory to make sure the code
-    # doesn't require pwd to be the workdir.
-    monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
-
+def repo(hermetic_seal, tmp_path_factory, monkeypatch):
     workdir = tmp_path_factory.mktemp("repo")
     subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
     with WrappedRepo(workdir) as repo:
@@ -97,9 +140,6 @@ def main(repo):
         return subprocess.run(cmd, **kwargs)
 
     return main
-
-
-EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
 
 
 class EditorFile(BaseHTTPRequestHandler):
@@ -223,33 +263,3 @@ class Editor(HTTPServer):
                 assert self.is_idle()
         finally:
             self.close()
-
-
-@pytest.fixture(autouse=True)
-def install_editor(monkeypatch):
-    url = f"http://{EDITOR_SERVER_ADDR[0]}:{EDITOR_SERVER_ADDR[1]}/"
-    # Use our fake editor as the `EDITOR` environment variable.
-    editor = [
-        sys.executable,
-        "-c",
-        textwrap.dedent(
-            f"""\
-            import sys
-            from pathlib import Path
-            from urllib.request import urlopen
-
-            path = Path(sys.argv[1]).resolve()
-            print("FAKE_EDITOR: Sending Edit Request", path)
-            with urlopen('{url}', data=path.read_bytes(), timeout=5) as r:
-                length = int(r.headers.get('content-length'))
-                data = r.read(length)
-                if r.status != 200:
-                    raise Exception(data.decode())
-            path.write_bytes(data)
-            print("FAKE_EDITOR: Finished Edit", path)
-            """
-        ),
-    ]
-    quoted = " ".join(shlex.quote(part) for part in editor)
-    assert shlex.split(quoted) == editor
-    monkeypatch.setenv("EDITOR", quoted)
