@@ -1,7 +1,9 @@
 # pylint: skip-file
 
+from conftest import *
 
-def test_cut(repo, bash, fake_editor, main):
+
+def test_cut(repo, bash, main):
     bash(
         """
         echo "Hello, World" >> file1
@@ -23,15 +25,14 @@ def test_cut(repo, bash, fake_editor, main):
     prev_u = prev.parent()
     prev_uu = prev_u.parent()
 
-    def editor(inq, outq):
-        assert inq.get().startswith(b"[1] commit 2\n")
-        outq.put(b"part 1\n")
+    with Editor() as ed, in_parallel(main, ["--cut", "HEAD~"], input=b"y\nn\n"):
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[1] commit 2\n")
+            f.replace_dedent("part 1\n")
 
-        assert inq.get().startswith(b"[2] commit 2\n")
-        outq.put(b"part 2\n")
-
-    with fake_editor(editor):
-        main(["--cut", "HEAD~"], input=b"y\nn\n")
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[2] commit 2\n")
+            f.replace_dedent("part 2\n")
 
     new = repo.get_commit("HEAD")
     new_u2 = new.parent()

@@ -14,7 +14,6 @@ from gitrevise.odb import Repository
 from contextlib import contextmanager
 from threading import Thread, Event
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from queue import Queue, Empty
 
 
 RESOURCES = Path(__file__).parent / "resources"
@@ -63,7 +62,7 @@ def _docopytree(source, dest, renamer=lambda x: x):
             shutil.copy2(srcf, destf)
 
 
-class TestRepo(Repository):
+class WrappedRepo(Repository):
     """repository object with extra helper methods for writing tests"""
 
     def load_template(self, name):
@@ -83,7 +82,7 @@ def repo(tmp_path_factory, monkeypatch):
 
     workdir = tmp_path_factory.mktemp("repo")
     subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
-    return TestRepo(workdir)
+    return WrappedRepo(workdir)
 
 
 @pytest.fixture
@@ -99,29 +98,153 @@ def main(repo):
     return main
 
 
+EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
+
+
+class EditorFile(BaseHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        self.response_ready = Event()
+        self.indata = None
+        self.outdata = None
+        super().__init__(*args, **kwargs)
+
+    def do_POST(self):
+        length = int(self.headers.get("content-length"))
+        self.indata = self.rfile.read(length)
+        self.outdata = b""
+
+        # The request is ready, tell our server, and wait for a reply.
+        assert self.server.current is None
+        self.server.current = self
+        try:
+            self.server.request_ready.set()
+            if not self.response_ready.wait(timeout=self.server.timeout):
+                raise Exception("timed out waiting for reply")
+        finally:
+            self.server.current = None
+
+    def send_editor_reply(self, status, data):
+        assert not self.response_ready.is_set(), "already replied?"
+        self.send_response(status)
+        self.send_header("content-length", len(data))
+        self.end_headers()
+        self.wfile.write(data)
+        self.response_ready.set()
+
+        # Ensure the handle thread has shut down
+        self.server.handle_thread.join()
+        self.server.handle_thread = None
+        assert self.server.current is None
+
+    def startswith(self, text):
+        return self.indata.startswith(text)
+
+    def startswith_dedent(self, text):
+        return self.startswith(textwrap.dedent(text).encode())
+
+    def equals(self, text):
+        return self.indata == text
+
+    def equals_dedent(self, text):
+        return self.equals(textwrap.dedent(text).encode())
+
+    def replace_dedent(self, text):
+        if isinstance(text, str):
+            text = textwrap.dedent(text).encode()
+        self.outdata = text
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, etype, evalue, tb):
+        if etype is None:
+            self.send_editor_reply(200, self.outdata)
+        else:
+            exc = "".join(traceback.format_exception(etype, evalue, tb)).encode()
+            try:
+                self.send_editor_reply(500, exc)
+            except:
+                pass
+
+    def __repr__(self):
+        return f"<EditorFile {self.indata!r}>"
+
+
+class Editor(HTTPServer):
+    def __init__(self):
+        super().__init__(EDITOR_SERVER_ADDR, EditorFile)
+        self.request_ready = Event()
+        self.handle_thread = None
+        self.current = None
+        self.timeout = 5
+
+    def next_file(self):
+        assert self.handle_thread is None
+        assert self.current is None
+
+        # Spawn a thread to handle the single request.
+        self.request_ready.clear()
+        self.handle_thread = Thread(target=self.handle_request)
+        self.handle_thread.start()
+        if not self.request_ready.wait(timeout=self.timeout):
+            raise Exception("timeout while waiting for request")
+
+        # Return the request we received and were notified about.
+        assert self.current
+        return self.current
+
+    def get(self):
+        edit = self.next_file()
+        assert self.current == edit
+        return edit.indata
+
+    def put(self, value):
+        assert self.current
+        self.current.send_editor_reply(200, value)
+        assert self.current is None
+        assert self.handle_thread is None
+
+    def is_idle(self):
+        return self.handle_thread is None and self.current is None
+
+    def close(self):
+        self.server_close()
+        if self.current:
+            self.current.send_editor_reply(500, b"editor server was shut down")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, etype, value, tb):
+        try:
+            # Only assert if we're not already raising an exception.
+            if etype is None:
+                assert self.is_idle()
+        finally:
+            self.close()
+
+
+@pytest.fixture(autouse=True)
 def install_editor(monkeypatch):
+    url = f"http://{EDITOR_SERVER_ADDR[0]}:{EDITOR_SERVER_ADDR[1]}/"
     # Use our fake editor as the `EDITOR` environment variable.
     editor = [
         sys.executable,
         "-c",
         textwrap.dedent(
-            """\
+            f"""\
             import sys
             from pathlib import Path
             from urllib.request import urlopen
 
             path = Path(sys.argv[1]).resolve()
             print("FAKE_EDITOR: Sending Edit Request", path)
-            resp = urlopen(
-                'http://127.0.0.1:8190/',
-                data=path.read_bytes(),
-                timeout=5,
-            )
-
-            print("FAKE_EDITOR: Reading Edit Reply", path)
-            length = int(resp.headers.get('content-length'))
-            path.write_bytes(resp.read(length))
-
+            with urlopen('{url}', data=path.read_bytes(), timeout=5) as r:
+                length = int(r.headers.get('content-length'))
+                data = r.read(length)
+                if r.status != 200:
+                    raise Exception(data.decode())
+            path.write_bytes(data)
             print("FAKE_EDITOR: Finished Edit", path)
             """
         ),
@@ -129,83 +252,3 @@ def install_editor(monkeypatch):
     quoted = " ".join(shlex.quote(part) for part in editor)
     assert shlex.split(quoted) == editor
     monkeypatch.setenv("EDITOR", quoted)
-
-
-class EditorHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        # The request is ready, tell our server.
-        assert self.server.current is None
-        self.server.current = self
-        self.server.request_ready.set()
-
-        # Wait for the response to become ready
-        self.server.response_ready.wait()
-        self.server.response_ready.clear()
-        self.server.current = None
-
-
-class EditorServer(HTTPServer):
-    def __init__(self, server_address):
-        super().__init__(server_address, EditorHandler)
-        self.request_ready = Event()
-        self.response_ready = Event()
-        self.handle_thread = None
-        self.current = None
-        self.timeout = 5
-
-    def get(self):
-        assert self.handle_thread is None
-        assert self.current is None
-
-        # Spawn a thread to handle the single request
-        self.handle_thread = Thread(target=self.handle_request)
-        self.handle_thread.start()
-
-        # Wait for the request to be ready
-        if not self.request_ready.wait(timeout=self.timeout):
-            raise Exception("timeout while waiting for request")
-        self.request_ready.clear()
-
-        assert self.current
-        length = int(self.current.headers.get("content-length"))
-        return self.current.rfile.read(length)
-
-    def put(self, value):
-        assert self.handle_thread
-        assert self.current
-
-        # Send the response
-        self.current.send_response(200)
-        self.current.send_header("content-length", len(value))
-        self.current.end_headers()
-        self.current.wfile.write(value)
-        self.current = None
-
-        # Notify handler the response is ready, and wait for it to exit.
-        self.response_ready.set()
-        self.handle_thread.join()
-        self.handle_thread = None
-
-    def is_idle(self):
-        return self.handle_thread is None and self.current is None
-
-    def close(self):
-        self.server_close()
-        self.response_ready.set()
-
-
-@pytest.fixture
-def fake_editor(monkeypatch):
-    install_editor(monkeypatch)
-
-    @contextmanager
-    def fake_editor(handler):
-        server = EditorServer(("127.0.0.1", 8190))
-        try:
-            with in_parallel(handler, server, server):
-                yield
-            assert server.is_idle()
-        finally:
-            server.close()
-
-    return fake_editor
