@@ -5,7 +5,7 @@ import os
 
 
 @pytest.fixture
-def basic_repo(repo, bash):
+def basic_repo(repo):
     bash(
         """
         cat <<EOF >file1
@@ -27,7 +27,7 @@ def basic_repo(repo, bash):
     return repo
 
 
-def fixup_helper(repo, bash, main, flags, target, message=None):
+def fixup_helper(repo, flags, target, message=None):
     old = repo.get_commit(target)
     assert old.persisted
 
@@ -56,61 +56,53 @@ def fixup_helper(repo, bash, main, flags, target, message=None):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_fixup_head(basic_repo, bash, main):
-    fixup_helper(basic_repo, bash, main, [], "HEAD")
+def test_fixup_head(basic_repo):
+    fixup_helper(basic_repo, [], "HEAD")
 
 
-def test_fixup_nonhead(basic_repo, bash, main):
-    fixup_helper(basic_repo, bash, main, [], "HEAD~")
+def test_fixup_nonhead(basic_repo):
+    fixup_helper(basic_repo, [], "HEAD~")
 
 
-def test_fixup_head_msg(basic_repo, bash, main):
+def test_fixup_head_msg(basic_repo):
     fixup_helper(
         basic_repo,
-        bash,
-        main,
         ["-m", "fixup_head test", "-m", "another line"],
         "HEAD",
         "fixup_head test\n\nanother line\n",
     )
 
 
-def test_fixup_nonhead_msg(basic_repo, bash, main):
+def test_fixup_nonhead_msg(basic_repo):
     fixup_helper(
         basic_repo,
-        bash,
-        main,
         ["-m", "fixup_nonhead test", "-m", "another line"],
         "HEAD~",
         "fixup_nonhead test\n\nanother line\n",
     )
 
 
-def test_fixup_head_editor(basic_repo, bash, main):
+def test_fixup_head_editor(basic_repo):
     old = basic_repo.get_commit("HEAD")
     newmsg = "fixup_head_editor test\n\nanother line\n"
 
-    with Editor() as ed, in_parallel(
-        fixup_helper, basic_repo, bash, main, ["-e"], "HEAD", newmsg
-    ):
+    with Editor() as ed, in_parallel(fixup_helper, basic_repo, ["-e"], "HEAD", newmsg):
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_editor(basic_repo, bash, main):
+def test_fixup_nonhead_editor(basic_repo):
     old = basic_repo.get_commit("HEAD~")
     newmsg = "fixup_nonhead_editor test\n\nanother line\n"
 
-    with Editor() as ed, in_parallel(
-        fixup_helper, basic_repo, bash, main, ["-e"], "HEAD~", newmsg
-    ):
+    with Editor() as ed, in_parallel(fixup_helper, basic_repo, ["-e"], "HEAD~", newmsg):
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_conflict(basic_repo, bash, main):
+def test_fixup_nonhead_conflict(basic_repo):
     import textwrap
 
     bash('echo "conflict" > file1')
@@ -152,7 +144,7 @@ def test_fixup_nonhead_conflict(basic_repo, bash, main):
     assert new != old
 
 
-def test_autosquash_nonhead(repo, bash, main):
+def test_autosquash_nonhead(repo):
     bash(
         """
         echo "hello, world" > file1
