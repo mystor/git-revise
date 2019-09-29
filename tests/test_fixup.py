@@ -4,6 +4,29 @@ from conftest import *
 import os
 
 
+@pytest.fixture
+def basic_repo(repo, bash):
+    bash(
+        """
+        cat <<EOF >file1
+        Hello, World!
+        How are things?
+        EOF
+        git add file1
+        git commit -m "commit1"
+
+        cat <<EOF >file1
+        Hello, World!
+        Oops, gotta add a new line!
+        How are things?
+        EOF
+        git add file1
+        git commit -m "commit2"
+        """
+    )
+    return repo
+
+
 def fixup_helper(repo, bash, main, flags, target, message=None):
     old = repo.get_commit(target)
     assert old.persisted
@@ -33,20 +56,17 @@ def fixup_helper(repo, bash, main, flags, target, message=None):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_fixup_head(repo, bash, main):
-    repo.load_template("basic")
-    fixup_helper(repo, bash, main, [], "HEAD")
+def test_fixup_head(basic_repo, bash, main):
+    fixup_helper(basic_repo, bash, main, [], "HEAD")
 
 
-def test_fixup_nonhead(repo, bash, main):
-    repo.load_template("basic")
-    fixup_helper(repo, bash, main, [], "HEAD~")
+def test_fixup_nonhead(basic_repo, bash, main):
+    fixup_helper(basic_repo, bash, main, [], "HEAD~")
 
 
-def test_fixup_head_msg(repo, bash, main):
-    repo.load_template("basic")
+def test_fixup_head_msg(basic_repo, bash, main):
     fixup_helper(
-        repo,
+        basic_repo,
         bash,
         main,
         ["-m", "fixup_head test", "-m", "another line"],
@@ -55,10 +75,9 @@ def test_fixup_head_msg(repo, bash, main):
     )
 
 
-def test_fixup_nonhead_msg(repo, bash, main):
-    repo.load_template("basic")
+def test_fixup_nonhead_msg(basic_repo, bash, main):
     fixup_helper(
-        repo,
+        basic_repo,
         bash,
         main,
         ["-m", "fixup_nonhead test", "-m", "another line"],
@@ -67,42 +86,37 @@ def test_fixup_nonhead_msg(repo, bash, main):
     )
 
 
-def test_fixup_head_editor(repo, bash, main):
-    repo.load_template("basic")
-
-    old = repo.get_commit("HEAD")
+def test_fixup_head_editor(basic_repo, bash, main):
+    old = basic_repo.get_commit("HEAD")
     newmsg = "fixup_head_editor test\n\nanother line\n"
 
     with Editor() as ed, in_parallel(
-        fixup_helper, repo, bash, main, ["-e"], "HEAD", newmsg
+        fixup_helper, basic_repo, bash, main, ["-e"], "HEAD", newmsg
     ):
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_editor(repo, bash, main):
-    repo.load_template("basic")
-
-    old = repo.get_commit("HEAD~")
+def test_fixup_nonhead_editor(basic_repo, bash, main):
+    old = basic_repo.get_commit("HEAD~")
     newmsg = "fixup_nonhead_editor test\n\nanother line\n"
 
     with Editor() as ed, in_parallel(
-        fixup_helper, repo, bash, main, ["-e"], "HEAD~", newmsg
+        fixup_helper, basic_repo, bash, main, ["-e"], "HEAD~", newmsg
     ):
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_conflict(repo, bash, main):
+def test_fixup_nonhead_conflict(basic_repo, bash, main):
     import textwrap
 
-    repo.load_template("basic")
     bash('echo "conflict" > file1')
     bash("git add file1")
 
-    old = repo.get_commit("HEAD~")
+    old = basic_repo.get_commit("HEAD~")
     assert old.persisted
 
     with Editor() as ed, in_parallel(main, ["HEAD~"], input=b"y\ny\ny\ny\n"):
@@ -111,7 +125,7 @@ def test_fixup_nonhead_conflict(repo, bash, main):
                 f"""\
                 <<<<<<< {os.sep}file1 (new parent)
                 Hello, World!
-
+                How are things?
                 =======
                 conflict
                 >>>>>>> {os.sep}file1 (incoming)
@@ -127,13 +141,13 @@ def test_fixup_nonhead_conflict(repo, bash, main):
                 =======
                 Hello, World!
                 Oops, gotta add a new line!
-
+                How are things?
                 >>>>>>> {os.sep}file1 (incoming)
                 """
             )
             f.replace_dedent("conflict2\n")
 
-    new = repo.get_commit("HEAD~")
+    new = basic_repo.get_commit("HEAD~")
     assert new.persisted
     assert new != old
 
