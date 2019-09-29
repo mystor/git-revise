@@ -5,7 +5,7 @@ import pytest
 from conftest import *
 
 
-def interactive_reorder_helper(repo, bash, main, cwd):
+def interactive_reorder_helper(repo, cwd):
     bash(
         """
         echo "hello, world" > file1
@@ -59,16 +59,16 @@ def interactive_reorder_helper(repo, bash, main, cwd):
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
 
 
-def test_interactive_reorder(repo, bash, main):
-    interactive_reorder_helper(repo, bash, main, cwd=repo.workdir)
+def test_interactive_reorder(repo):
+    interactive_reorder_helper(repo, cwd=repo.workdir)
 
 
-def test_interactive_reorder_subdir(repo, bash, main):
+def test_interactive_reorder_subdir(repo):
     bash("mkdir subdir")
-    interactive_reorder_helper(repo, bash, main, cwd=repo.workdir / "subdir")
+    interactive_reorder_helper(repo, cwd=repo.workdir / "subdir")
 
 
-def test_interactive_fixup(repo, bash, main):
+def test_interactive_fixup(repo):
     bash(
         """
         echo "hello, world" > file1
@@ -152,7 +152,7 @@ def test_interactive_fixup(repo, bash, main):
         (None, "1", True),
     ],
 )
-def test_autosquash_config(repo, bash, main, rebase_config, revise_config, expected):
+def test_autosquash_config(repo, rebase_config, revise_config, expected):
     bash(
         """
         echo "hello, world" > file1
@@ -208,7 +208,7 @@ def test_autosquash_config(repo, bash, main, rebase_config, revise_config, expec
     subtest(["--no-autosquash"], disabled)
 
 
-def test_interactive_reword(repo, bash, main):
+def test_interactive_reword(repo):
     bash(
         """
         echo "hello, world" > file1

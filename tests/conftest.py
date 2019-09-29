@@ -64,9 +64,16 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
     # Install our fake editor
     monkeypatch.setenv("GIT_EDITOR", EDITOR_COMMAND)
 
-    # Switch into a test workdir
-    workdir = tmp_path_factory.mktemp("cwd")
+    # Switch into a test workdir, and init our repo
+    workdir = tmp_path_factory.mktemp("workdir")
     monkeypatch.chdir(workdir)
+    bash("git init -q")
+
+
+@pytest.fixture
+def repo(hermetic_seal):
+    with Repository() as repo:
+        yield repo
 
 
 @contextmanager
@@ -92,33 +99,16 @@ def in_parallel(func, *args, **kwargs):
         raise thread.exception
 
 
-@pytest.fixture
-def bash(repo):
-    def run_bash(command, check=True, cwd=repo.workdir):
-        subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd)
-
-    return run_bash
+def bash(command, check=True, cwd=None):
+    subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd)
 
 
-@pytest.fixture
-def repo(hermetic_seal, tmp_path_factory, monkeypatch):
-    workdir = tmp_path_factory.mktemp("repo")
-    subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
-    with Repository(workdir) as repo:
-        yield repo
-
-
-@pytest.fixture
-def main(repo):
-    # Run the main entry point for git-revise in a subprocess.
-    def main(args, **kwargs):
-        kwargs.setdefault("cwd", repo.workdir)
-        kwargs.setdefault("check", True)
-        cmd = [sys.executable, "-m", "gitrevise", *args]
-        print("Running", cmd, kwargs)
-        return subprocess.run(cmd, **kwargs)
-
-    return main
+# Run the main entry point for git-revise in a subprocess.
+def main(args, **kwargs):
+    kwargs.setdefault("check", True)
+    cmd = [sys.executable, "-m", "gitrevise", *args]
+    print("Running", cmd, kwargs)
+    return subprocess.run(cmd, **kwargs)
 
 
 class EditorFile(BaseHTTPRequestHandler):

@@ -3,7 +3,7 @@
 from conftest import *
 
 
-def test_cut(repo, bash, main):
+def test_cut(repo):
     bash(
         """
         echo "Hello, World" >> file1
