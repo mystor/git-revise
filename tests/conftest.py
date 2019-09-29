@@ -99,8 +99,17 @@ def in_parallel(func, *args, **kwargs):
         raise thread.exception
 
 
-def bash(command, check=True, cwd=None):
-    subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=check, cwd=cwd)
+def bash(command):
+    # Use a custom environment for bash commands so commits with those commands
+    # have unique names and emails.
+    env = dict(
+        os.environ,
+        GIT_AUTHOR_NAME="Bash Author",
+        GIT_AUTHOR_EMAIL="bash_author@example.com",
+        GIT_COMMITTER_NAME="Bash Committer",
+        GIT_COMMITTER_EMAIL="bash_committer@example.com",
+    )
+    subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=True, env=env)
 
 
 # Run the main entry point for git-revise in a subprocess.
