@@ -16,7 +16,6 @@ from threading import Thread, Event
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
-RESOURCES = Path(__file__).parent / "resources"
 EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
 EDITOR_SCRIPT = """\
 import sys
@@ -98,34 +97,11 @@ def bash(repo):
     return run_bash
 
 
-def _docopytree(source, dest, renamer=lambda x: x):
-    for dirpath, _, filenames in os.walk(source):
-        srcdir = Path(dirpath)
-        reldir = srcdir.relative_to(source)
-
-        for name in filenames:
-            srcf = srcdir / name
-            destf = dest / renamer(reldir / name)
-            destf.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(srcf, destf)
-
-
-class WrappedRepo(Repository):
-    """repository object with extra helper methods for writing tests"""
-
-    def load_template(self, name):
-        def renamer(path):
-            # If a segment named _git is present, replace it with .git.
-            return Path(*[".git" if p == "_git" else p for p in path.parts])
-
-        _docopytree(RESOURCES / name, self.workdir, renamer=renamer)
-
-
 @pytest.fixture
 def repo(hermetic_seal, tmp_path_factory, monkeypatch):
     workdir = tmp_path_factory.mktemp("repo")
     subprocess.run(["git", "init", "-q"], check=True, cwd=workdir)
-    with WrappedRepo(workdir) as repo:
+    with Repository(workdir) as repo:
         yield repo
 
 

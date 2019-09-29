@@ -4,6 +4,29 @@ import textwrap
 from conftest import *
 
 
+@pytest.fixture
+def basic_repo(repo, bash):
+    bash(
+        """
+        cat <<EOF >file1
+        Hello, World!
+        How are things?
+        EOF
+        git add file1
+        git commit -m "commit1"
+
+        cat <<EOF >file1
+        Hello, World!
+        Oops, gotta add a new line!
+        How are things?
+        EOF
+        git add file1
+        git commit -m "commit2"
+        """
+    )
+    return repo
+
+
 def reword_helper(repo, main, flags, target, message):
     message = textwrap.dedent(message).encode()
 
@@ -24,10 +47,9 @@ def reword_helper(repo, main, flags, target, message):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_reword_head(repo, main):
-    repo.load_template("basic")
+def test_reword_head(basic_repo, main):
     reword_helper(
-        repo,
+        basic_repo,
         main,
         ["--no-index", "-m", "reword_head test", "-m", "another line"],
         "HEAD",
@@ -35,10 +57,9 @@ def test_reword_head(repo, main):
     )
 
 
-def test_reword_nonhead(repo, main):
-    repo.load_template("basic")
+def test_reword_nonhead(basic_repo, main):
     reword_helper(
-        repo,
+        basic_repo,
         main,
         ["--no-index", "-m", "reword_nonhead test", "-m", "another line"],
         "HEAD~",
@@ -46,10 +67,8 @@ def test_reword_nonhead(repo, main):
     )
 
 
-def test_reword_head_editor(repo, main):
-    repo.load_template("basic")
-
-    old = repo.get_commit("HEAD")
+def test_reword_head_editor(basic_repo, main):
+    old = basic_repo.get_commit("HEAD")
     new_message = """\
         reword_head_editor test
 
@@ -57,17 +76,15 @@ def test_reword_head_editor(repo, main):
         """
 
     with Editor() as ed, in_parallel(
-        reword_helper, repo, main, ["--no-index", "-e"], "HEAD", new_message
+        reword_helper, basic_repo, main, ["--no-index", "-e"], "HEAD", new_message
     ):
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(new_message)
 
 
-def test_reword_nonhead_editor(repo, main):
-    repo.load_template("basic")
-
-    old = repo.get_commit("HEAD~")
+def test_reword_nonhead_editor(basic_repo, main):
+    old = basic_repo.get_commit("HEAD~")
     new_message = """\
         reword_nonhead_editor test
 
@@ -75,7 +92,7 @@ def test_reword_nonhead_editor(repo, main):
         """
 
     with Editor() as ed, in_parallel(
-        reword_helper, repo, main, ["--no-index", "-e"], "HEAD~", new_message
+        reword_helper, basic_repo, main, ["--no-index", "-e"], "HEAD~", new_message
     ):
         with ed.next_file() as f:
             assert f.startswith(old.message)
