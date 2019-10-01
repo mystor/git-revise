@@ -1,6 +1,6 @@
 # Changelog
 
-## vNext
+## v0.5.0
 
 * Invoke `GIT_EDITOR` correctly when it includes quotes.
 * Use `sh` instead of `bash` to run `GIT_EDITOR`.
