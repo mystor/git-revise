@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Sep 27, 2019" "0.4.2" "git-revise"
+.TH "GIT-REVISE" "1" "Oct 01, 2019" "0.5.0" "git-revise"
 .SH NAME
 git-revise \- Efficiently update, split, and rearrange git commits
 .
@@ -67,7 +67,7 @@ Ignore staged changes in the index.
 .INDENT 0.0
 .TP
 .B \-\-reauthor
-Reset target commit’s author to the current user.
+Reset target commit\(aqs author to the current user.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -94,7 +94,7 @@ These commits are usually created with \fBgit commit \-\-fixup=<commit>\fP or
 line of its commit message.
 .sp
 This option can be combined with \fI\%\-\-interactive\fP to modify the
-generated todos before they’re executed.
+generated todos before they\(aqre executed.
 .sp
 If the \fI\%\-\-autosquash\fP option is enabled by default using a
 configuration variable, the option \fI\%\-\-no\-autosquash\fP can be used
@@ -106,15 +106,15 @@ to override and disable this setting. See \fI\%CONFIGURATION\fP\&.
 Interactively select hunks from <target>. The chosen hunks are split into
 a second commit immediately after the target.
 .sp
-After splitting is complete, both commits’ messages are edited.
+After splitting is complete, both commits\(aq messages are edited.
 .sp
-See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B \-e, \-\-edit
-After applying staged changes, edit <target>’s commit message.
+After applying staged changes, edit <target>\(aqs commit message.
 .sp
 This option can be combined with \fI\%\-\-interactive\fP to allow editing
 of commit messages within the todo list. For more information on, see
@@ -170,7 +170,7 @@ modifying history on a repository that you share.
 \fBgit revise\fP supports an interactive mode inspired by the
 interactive mode of \fBgit\-rebase(1)\fP\&.
 .sp
-This mode is started with the last commit you want to retain “as\-is”:
+This mode is started with the last commit you want to retain "as\-is":
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -244,13 +244,13 @@ Use the given commit as\-is in history. When applied to the generated
 .INDENT 0.0
 .TP
 .B fixup
-Add the commit’s changes into the previous commit, discarding its commit
+Add the commit\(aqs changes into the previous commit, discarding its commit
 message.
 .UNINDENT
 .INDENT 0.0
 .TP
 .B squash
-Like fixup, but also open an editor to merge the commits’ messages.
+Like fixup, but also open an editor to merge the commits\(aq messages.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -263,9 +263,9 @@ Open an editor to modify the commit message.
 Interactively select hunks from the commit. The chosen hunks are split
 into a second commit immediately after it.
 .sp
-After splitting is complete, both commits’ messages are edited.
+After splitting is complete, both commits\(aq messages are edited.
 .sp
-See the “Interactive Mode” section of \fBgit\-add(1)\fP to learn how
+See the "Interactive Mode" section of \fBgit\-add(1)\fP to learn how
 to operate this mode.
 .UNINDENT
 .SH REPORTING BUGS
