@@ -31,7 +31,7 @@ def rebase(commit: Commit, parent: Commit) -> Commit:
 
     tree = merge_trees(
         Path("/"),
-        ("new parent", "old parent", "incoming"),
+        (parent.summary(), commit.parent().summary(), commit.summary()),
         parent.tree(),
         commit.parent().tree(),
         commit.tree(),
@@ -185,9 +185,9 @@ def merge_blobs(
             "merge-file",
             "-q",
             "-p",
-            f"-L{path} ({labels[0]})",
-            f"-L{path} ({labels[1]})",
-            f"-L{path} ({labels[2]})",
+            f"-L{path} (new parent): {labels[0]}",
+            f"-L{path} (old parent): {labels[1]}",
+            f"-L{path} (current): {labels[2]}",
             str(tmpdir / "current"),
             str(tmpdir / "base"),
             str(tmpdir / "other"),
@@ -201,7 +201,8 @@ def merge_blobs(
 
         # At this point, we know that there are merge conflicts to resolve.
         # Prompt to try and trigger manual resolution.
-        print(f"Merge conflict for '{path}'")
+        print(f"Conflict in applying '{labels[2]}'")
+        print(f"  Path: '{path}'")
         if input("  Edit conflicted file? (Y/n) ").lower() == "n":
             raise MergeConflict("user aborted")
 
