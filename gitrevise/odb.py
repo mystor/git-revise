@@ -304,11 +304,11 @@ class Repository:
             ref = ref.hex()
 
         # Write out an object descriptor.
-        self._catfile.stdin.write(ref.encode("ascii") + b"\n")
+        self._catfile.stdin.write(ref.encode() + b"\n")
         self._catfile.stdin.flush()
 
         # Read in the response.
-        resp = self._catfile.stdout.readline().decode("ascii")
+        resp = self._catfile.stdout.readline().decode()
         if resp.endswith("missing\n"):
             # If we have an abbreviated hash, check for in-memory commits.
             try:
