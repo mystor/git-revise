@@ -64,7 +64,7 @@ class Oid(bytes):
         """Hash an object with the given type tag and body to determine its Oid"""
         hasher = hashlib.sha1()
         hasher.update(
-            tag.encode("ascii") + b" " + str(len(body)).encode("ascii") + b"\0" + body
+            tag.encode() + b" " + str(len(body)).encode() + b"\0" + body
         )
         return cls(hasher.digest())
 
@@ -267,9 +267,9 @@ class Repository:
         if committer is None:
             committer = self.default_committer
 
-        body = b"tree " + tree.oid.hex().encode("ascii") + b"\n"
+        body = b"tree " + tree.oid.hex().encode() + b"\n"
         for parent in parents:
-            body += b"parent " + parent.oid.hex().encode("ascii") + b"\n"
+            body += b"parent " + parent.oid.hex().encode() + b"\n"
         body += b"author " + author + b"\n"
         body += b"committer " + committer + b"\n"
         body += b"\n"
@@ -436,7 +436,7 @@ class GitObj:
             stdin=self.body,
         )
 
-        assert Oid.fromhex(new_oid.decode("ascii")) == self.oid
+        assert Oid.fromhex(new_oid.decode()) == self.oid
         self.persisted = True
         return self.oid
 
