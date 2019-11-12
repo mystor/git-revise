@@ -63,9 +63,7 @@ class Oid(bytes):
     def for_object(cls, tag: str, body: bytes):
         """Hash an object with the given type tag and body to determine its Oid"""
         hasher = hashlib.sha1()
-        hasher.update(
-            tag.encode() + b" " + str(len(body)).encode() + b"\0" + body
-        )
+        hasher.update(tag.encode() + b" " + str(len(body)).encode() + b"\0" + body)
         return cls(hasher.digest())
 
     def __repr__(self) -> str:
