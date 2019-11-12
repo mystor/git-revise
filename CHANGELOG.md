@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.1
+
+* Support non-ASCII branchnames. (#48)
+* LICENSE included in PyPi package. (#44)
+
 ## v0.5.0
 
 * Invoke `GIT_EDITOR` correctly when it includes quotes.
