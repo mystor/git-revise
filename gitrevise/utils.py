@@ -121,7 +121,10 @@ def run_editor(
         if comments:  # If comments were provided, write them after the text.
             handle.write(b"\n")
             for comment in textwrap.dedent(comments).splitlines():
-                handle.write(commentchar + b" " + comment.encode("utf-8") + b"\n")
+                handle.write(commentchar)
+                if comment:
+                    handle.write(b" " + comment.encode("utf-8"))
+                handle.write(b"\n")
 
     # Invoke the editor
     data = edit_file(repo, path)
