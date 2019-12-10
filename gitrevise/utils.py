@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple
 from subprocess import run, CalledProcessError
 from pathlib import Path
+from enum import Enum
 import textwrap
 import sys
 import shlex
@@ -11,6 +12,19 @@ from .odb import Repository, Commit, Tree, Oid, Reference
 
 class EditorError(Exception):
     pass
+
+
+class BufferType(Enum):
+    UNKNOWN = 0
+    COMMIT_MSG = 1
+    REVISE_TODO = 2
+    REVISE_TODO_MSG_EDIT = 3
+
+
+class EditorKind(Enum):
+    UNKNOWN = 0
+    EMACS = 1
+    VI = 2
 
 
 def commit_range(base: Commit, tip: Commit) -> List[Commit]:
@@ -54,6 +68,43 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
     # Reverse our list into oldest-first order.
     commits.reverse()
     return base, commits
+
+
+def editor_kind(repo: Repository) -> EditorKind:
+    if os.name == "nt":
+        return EditorKind.UNKNOWN
+
+    editor = repo.git("var", "GIT_EDITOR").decode()
+
+    basename_lc = os.path.basename(editor).lower()
+    if "emacs" in basename_lc:
+        return EditorKind.EMACS
+    elif "vi" in basename_lc:
+        return EditorKind.VI
+
+    return EditorKind.UNKNOWN
+
+
+def syntax_hint(repo: Repository, btype: Optional[BufferType] = None) -> bytes:
+    """Given the editor and the type of buffer which will be edited, provide a
+    hint for the editor as to which syntax highlighting to use."""
+
+    ekind = editor_kind(repo)
+
+    if btype is None or ekind == EditorKind.UNKNOWN:
+        return b""
+    # elif ekind == EditorKind.EMACS:
+    #     if btype == BufferType.COMMIT_MSG:
+    #         return b"-*- mode: git-commit-mode -*-"
+    #     elif btype == BufferType.REVISE_TODO:
+    #         return b"-*- mode: git-rebase-mode -*-"
+    elif ekind == EditorKind.VI:
+        if btype == BufferType.COMMIT_MSG:
+            return b"vi: ft=gitcommit"
+        elif btype in (BufferType.REVISE_TODO, BufferType.REVISE_TODO_MSG_EDIT):
+            return b"vi: ft=gitrebase"
+
+    return b""
 
 
 def edit_file(repo: Repository, path: Path) -> bytes:
@@ -109,6 +160,7 @@ def run_editor(
     filename: str,
     text: bytes,
     comments: Optional[str] = None,
+    type_: Optional[BufferType] = None,
     allow_empty: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
@@ -125,6 +177,10 @@ def run_editor(
                 if comment:
                     handle.write(b" " + comment.encode("utf-8"))
                 handle.write(b"\n")
+
+            hint = syntax_hint(repo, type_)
+            if hint:
+                handle.write(commentchar + b"\n" + commentchar + b" " + hint + b"\n")
 
     # Invoke the editor
     data = edit_file(repo, path)
@@ -153,7 +209,13 @@ def edit_commit_message(commit: Commit) -> Commit:
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
 
-    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, comments=comments)
+    message = run_editor(
+        repo,
+        "COMMIT_EDITMSG",
+        commit.message,
+        comments=comments,
+        type_=BufferType.COMMIT_MSG,
+    )
     return commit.update(message=message)
 
 

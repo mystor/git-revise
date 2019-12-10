@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional
 
 from .odb import Commit, Repository
-from .utils import run_editor, edit_commit_message, cut_commit
+from .utils import BufferType, run_editor, edit_commit_message, cut_commit
 
 
 class StepKind(Enum):
@@ -166,6 +166,7 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
 
         However, if you remove everything, these changes will be aborted.
         """,
+        type_=BufferType.REVISE_TODO_MSG_EDIT,
     )
 
     # Parse the response back into a list of steps
@@ -224,6 +225,7 @@ def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]
 
         However, if you remove everything, these changes will be aborted.
         """,
+        type_=BufferType.REVISE_TODO,
     )
 
     # Parse the response back into a list of steps
