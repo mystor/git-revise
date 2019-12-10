@@ -151,20 +151,26 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
         Commands:
          p, pick <commit> = use commit
          r, reword <commit> = use commit, but edit the commit message
-         f, fixup <commit> = use commit, but fuse changes into previous commit
-         s, squash <commit> = like fixup, but also edit the commit message
+         s, squash <commit> = use commit, but meld into previous commit
+         f, fixup <commit> = like "squash", but discard this commit's message
          c, cut <commit> = interactively split commit into two smaller commits
-         i, index <commit> = leave commit changes unstaged
+         i, index <commit> = leave commit changes staged
 
-        Each command is prefixed by a '++' marker, and followed by the complete
-        commit message.
+        Each command block is prefixed by a '++' marker, followed by the command to
+        run, the commit hash and after a newline the complete commit message until
+        the next '++' marker or the end of the file.
 
-        Commit messages will be reworded to match the text following them
-        before the command is performed.
+        Commit messages will be reworded to match the provided message before the
+        command is performed.
 
-        If a command is removed, it will be treated like an 'index' line.
+        These blocks are executed from top to bottom. They can be re-ordered and
+        their commands and messages can be changed, however the number of blocks
+        must remain identical.
+        If present, then index command blocks must be at the bottom of the list,
+        i.e. they can not be followed by non-index commands. Also, their messages
+        are lost.
 
-        However, if you remove everything, these changes will be aborted.
+        If you remove everything, the revising process will be aborted.
         """,
     )
 
@@ -200,16 +206,19 @@ def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]
         Commands:
          p, pick <commit> = use commit
          r, reword <commit> = use commit, but edit the commit message
-         f, fixup <commit> = use commit, but fuse changes into previous commit
-         s, squash <commit> = like fixup, but also edit the commit message
+         s, squash <commit> = use commit, but meld into previous commit
+         f, fixup <commit> = like "squash", but discard this commit's log message
          c, cut <commit> = interactively split commit into two smaller commits
-         i, index <commit> = leave commit changes unstaged
+         i, index <commit> = leave commit changes staged
 
-        These lines can be re-ordered; they are executed from top to bottom.
+        These lines are executed from top to bottom. They can be re-ordered and
+        their commands can be changed, however the number of lines must remain
+        identical.
+        If present, then index lines must be at the bottom of the list, i.e. they
+        can not be followed by non-index lines. Also, their commit messages are
+        lost.
 
-        If a line is removed, it will be treated like an 'index' line.
-
-        However, if you remove everything, these changes will be aborted.
+        If you remove everything, the revising process will be aborted.
         """,
     )
 
