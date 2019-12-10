@@ -137,7 +137,7 @@ def autosquash_todos(todos: List[Step]) -> List[Step]:
 def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
     todos_text = b""
     for step in todos:
-        todos_text += f"++ {step}\n".encode()
+        todos_text += f"{step} ++=++\n".encode()
         todos_text += step.commit.message + b"\n"
 
     # Invoke the editors to parse commit messages.
@@ -156,8 +156,8 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
          c, cut <commit> = interactively split commit into two smaller commits
          i, index <commit> = leave commit changes unstaged
 
-        Each command is prefixed by a '++' marker, and followed by the complete
-        commit message.
+        Each command is followed by a '++=++' marker, and after a a newline the
+        complete commit message.
 
         Commit messages will be reworded to match the text following them
         before the command is performed.
@@ -170,9 +170,22 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
 
     # Parse the response back into a list of steps
     result = []
-    for full in re.split(br"^\+\+ ", response, flags=re.M)[1:]:
-        cmd, message = full.split(b"\n", maxsplit=1)
 
+    cmds_and_messages = [
+        y
+        for x in re.split(br" \+\+\=\+\+$", response, flags=re.M)
+        for y in x.rsplit(b"\n", maxsplit=1)
+    ]
+
+    def pairs(iterable):
+        it = iter(iterable)
+        while True:
+            try:
+                yield (next(it), next(it))
+            except StopIteration:
+                return
+
+    for cmd, message in pairs(cmds_and_messages):
         step = Step.parse(repo, cmd.decode(errors="replace").strip())
         step.message = message.strip() + b"\n"
         result.append(step)
