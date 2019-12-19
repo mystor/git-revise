@@ -178,8 +178,8 @@ index>`` entry will also be present.
 
 These commits may be re-ordered to change the order they appear in history.
 In addition, the ``pick`` and ``index`` commands may be replaced to modify
-their behaviour. If present, then ``index`` commands must be at the bottom
-of the list, i.e. they can not be followed by non-index commands.
+their behaviour. If present, ``index`` commands must be at the bottom of the
+list, i.e. they can not be followed by non-index commands.
 
 If :option:`-e` was specified, the full commit message will be included, and
 each command line will begin with a ``++``. Any changes made to the commit
@@ -211,7 +211,7 @@ The following commands are supported in all interactive modes:
    .. note:
       Commits may not be deleted or dropped from the to-do list. To remove a
       commit, mark it as an index action, and use :manpage:`git-reset(1)` to
-      discard changes.
+      discard staged changes.
 
 .. describe:: pick
 
@@ -225,7 +225,7 @@ The following commands are supported in all interactive modes:
 
 .. describe:: fixup
 
-   Like squash, but discard this commit's message.
+   Like squash, but discard this commit's message rather than editing.
 
 .. describe:: reword
 

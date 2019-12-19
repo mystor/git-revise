@@ -201,7 +201,7 @@ def merge_blobs(
 
         # At this point, we know that there are merge conflicts to resolve.
         # Prompt to try and trigger manual resolution.
-        print(f"Conflict in applying '{labels[2]}'")
+        print(f"Conflict applying '{labels[2]}'")
         print(f"  Path: '{path}'")
         if input("  Edit conflicted file? (Y/n) ").lower() == "n":
             raise MergeConflict("user aborted")

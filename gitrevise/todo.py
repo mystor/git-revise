@@ -152,9 +152,9 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
          p, pick <commit> = use commit
          r, reword <commit> = use commit, but edit the commit message
          s, squash <commit> = use commit, but meld into previous commit
-         f, fixup <commit> = like "squash", but discard this commit's message
+         f, fixup <commit> = like squash, but discard this commit's message
          c, cut <commit> = interactively split commit into two smaller commits
-         i, index <commit> = leave commit changes staged
+         i, index <commit> = leave commit changes staged, but uncommitted
 
         Each command block is prefixed by a '++' marker, followed by the command to
         run, the commit hash and after a newline the complete commit message until
@@ -164,11 +164,10 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
         command is performed.
 
         These blocks are executed from top to bottom. They can be re-ordered and
-        their commands and messages can be changed, however the number of blocks
-        must remain identical.
-        If present, then index command blocks must be at the bottom of the list,
-        i.e. they can not be followed by non-index commands. Also, their messages
-        are lost.
+        their commands can be changed, however the number of blocks must remain
+        identical. If present, index blocks must be at the bottom of the list,
+        i.e. they can not be followed by non-index blocks.
+
 
         If you remove everything, the revising process will be aborted.
         """,
@@ -207,16 +206,14 @@ def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]
          p, pick <commit> = use commit
          r, reword <commit> = use commit, but edit the commit message
          s, squash <commit> = use commit, but meld into previous commit
-         f, fixup <commit> = like "squash", but discard this commit's log message
+         f, fixup <commit> = like squash, but discard this commit's log message
          c, cut <commit> = interactively split commit into two smaller commits
-         i, index <commit> = leave commit changes staged
+         i, index <commit> = leave commit changes staged, but uncommitted
 
         These lines are executed from top to bottom. They can be re-ordered and
         their commands can be changed, however the number of lines must remain
-        identical.
-        If present, then index lines must be at the bottom of the list, i.e. they
-        can not be followed by non-index lines. Also, their commit messages are
-        lost.
+        identical. If present, index lines must be at the bottom of the list,
+        i.e. they can not be followed by non-index lines.
 
         If you remove everything, the revising process will be aborted.
         """,

@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Dec 11, 2019" "0.5.1" "git-revise"
+.TH "GIT-REVISE" "1" "Dec 19, 2019" "0.5.1" "git-revise"
 .SH NAME
 git-revise \- Efficiently update, split, and rearrange git commits
 .
@@ -200,8 +200,8 @@ index 672841329981 <git index>
 .sp
 These commits may be re\-ordered to change the order they appear in history.
 In addition, the \fBpick\fP and \fBindex\fP commands may be replaced to modify
-their behaviour. If present, then \fBindex\fP commands must be at the bottom
-of the list, i.e. they can not be followed by non\-index commands.
+their behaviour. If present, \fBindex\fP commands must be at the bottom of the
+list, i.e. they can not be followed by non\-index commands.
 .sp
 If \fI\%\-e\fP was specified, the full commit message will be included, and
 each command line will begin with a \fB++\fP\&. Any changes made to the commit
@@ -251,7 +251,7 @@ to merge the commits\(aq messages.
 .INDENT 0.0
 .TP
 .B fixup
-Like squash, but discard this commit\(aqs message.
+Like squash, but discard this commit\(aqs message rather than editing.
 .UNINDENT
 .INDENT 0.0
 .TP
