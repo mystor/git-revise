@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional
 
 from .odb import Commit, Repository
-from .utils import run_editor, edit_commit_message, cut_commit
+from .utils import run_editor, run_sequence_editor, edit_commit_message, cut_commit
 
 
 class StepKind(Enum):
@@ -195,7 +195,7 @@ def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]
     for step in todos:
         todos_text += f"{step} {step.commit.summary()}\n".encode()
 
-    response = run_editor(
+    response = run_sequence_editor(
         repo,
         "git-revise-todo",
         todos_text,
