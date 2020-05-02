@@ -15,7 +15,7 @@ class StepKind(Enum):
     INDEX = "index"
 
     def __str__(self) -> str:
-        return self.value
+        return str(self.value)
 
     @staticmethod
     def parse(instr: str) -> "StepKind":
