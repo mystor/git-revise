@@ -301,12 +301,17 @@ class Repository:
                 return cache[ref]
             ref = ref.hex()
 
+        # Satisfy mypy: otherwise these are Optional[IO[Any]].
+        (stdin, stdout) = (self._catfile.stdin, self._catfile.stdout)
+        assert stdin is not None
+        assert stdout is not None
+
         # Write out an object descriptor.
-        self._catfile.stdin.write(ref.encode() + b"\n")
-        self._catfile.stdin.flush()
+        stdin.write(ref.encode() + b"\n")
+        stdin.flush()
 
         # Read in the response.
-        resp = self._catfile.stdout.readline().decode()
+        resp = stdout.readline().decode()
         if resp.endswith("missing\n"):
             # If we have an abbreviated hash, check for in-memory commits.
             try:
@@ -322,7 +327,7 @@ class Repository:
 
         parts = resp.rsplit(maxsplit=2)
         oid, kind, size = Oid.fromhex(parts[0]), parts[1], int(parts[2])
-        body = self._catfile.stdout.read(size + 1)[:-1]
+        body = stdout.read(size + 1)[:-1]
         assert size == len(body), "bad size?"
 
         # Create a corresponding git object. This will re-use the item in the
