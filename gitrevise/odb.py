@@ -560,9 +560,9 @@ class Commit(GitObj):
 
     def __repr__(self) -> str:
         return (
-            f"<Commit {self.oid} "
-            f"tree={self.tree_oid}, parents={self.parent_oids}, "
-            f"author={self.author}, committer={self.committer}>"
+            f"<Commit {repr(self.oid)} "
+            f"tree={repr(self.tree_oid)}, parents={repr(self.parent_oids)}, "
+            f"author={repr(self.author)}, committer={repr(self.committer)}>"
         )
 
 
