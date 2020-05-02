@@ -519,7 +519,7 @@ class Commit(GitObj):
     def rebase(self, parent: "Commit") -> "Commit":
         """Create a new commit with the same changes, except with ``parent``
         as it's parent."""
-        from .merge import rebase
+        from .merge import rebase  # pylint: disable=import-outside-toplevel
 
         return rebase(self, parent)
 
