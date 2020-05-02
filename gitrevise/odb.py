@@ -716,11 +716,11 @@ class Index:
         cwd: Optional[Path] = None,
         stdin: Optional[bytes] = None,
         newline: bool = True,
-        env: Mapping[str, str] = os.environ,
+        env: Optional[Mapping[str, str]] = None,
         nocapture: bool = False,
     ) -> bytes:
         """Invoke git with the given index as active"""
-        env = dict(**env)
+        env = dict(**env) if env is not None else dict(**os.environ)
         env["GIT_INDEX_FILE"] = str(self.index_file)
         return self.repo.git(
             *cmd, cwd=cwd, stdin=stdin, newline=newline, env=env, nocapture=nocapture
