@@ -112,7 +112,7 @@ def interactive(
         # Update the value of HEAD to the new state.
         update_head(head, new_head, None)
     else:
-        print(f"(warning) no changes performed", file=sys.stderr)
+        print("(warning) no changes performed", file=sys.stderr)
 
 
 def enable_autosquash(args: Namespace, repo: Repository) -> bool:
@@ -176,7 +176,7 @@ def noninteractive(
 
         update_head(head, current, final)
     else:
-        print(f"(warning) no changes performed", file=sys.stderr)
+        print("(warning) no changes performed", file=sys.stderr)
 
 
 def inner_main(args: Namespace, repo: Repository):
