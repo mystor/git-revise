@@ -5,6 +5,7 @@ import textwrap
 import sys
 import shlex
 import os
+import re
 
 from .odb import Repository, Commit, Tree, Oid, Reference
 
@@ -91,10 +92,23 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
-def strip_comments(data: bytes, commentchar: bytes) -> bytes:
+def strip_comments(
+    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
+) -> bytes:
+    if allow_preceding_whitespace:
+        pat_is_comment_line = re.compile(br"^\s*" + re.escape(commentchar))
+
+        def is_comment_line(line):
+            return re.match(pat_is_comment_line, line)
+
+    else:
+
+        def is_comment_line(line):
+            return line.startswith(commentchar)
+
     lines = b""
     for line in data.splitlines(keepends=True):
-        if not line.startswith(commentchar):
+        if not is_comment_line(line):
             lines += line
 
     lines = lines.rstrip()
@@ -110,6 +124,7 @@ def run_specific_editor(
     text: bytes,
     comments: Optional[str] = None,
     allow_empty: bool = False,
+    allow_whitespace_before_comments: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
     path = repo.get_tempdir() / filename
@@ -129,7 +144,11 @@ def run_specific_editor(
     # Invoke the editor
     data = edit_file_with_editor(editor, path)
     if comments:
-        data = strip_comments(data, commentchar)
+        data = strip_comments(
+            data,
+            commentchar,
+            allow_preceding_whitespace=allow_whitespace_before_comments,
+        )
 
     # Produce an error if the file was empty
     if not (allow_empty or data):
@@ -190,6 +209,7 @@ def run_sequence_editor(
         text=text,
         comments=comments,
         allow_empty=allow_empty,
+        allow_whitespace_before_comments=True,
     )
 
 
