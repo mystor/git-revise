@@ -11,7 +11,7 @@ setup(
     packages=["gitrevise"],
     python_requires=">=3.6",
     entry_points={"console_scripts": ["git-revise = gitrevise.tui:main"]},
-    data_files=[("man/man1", ["git-revise.1"])],
+    data_files=[("share/man/man1", ["git-revise.1"])],
     author="Nika Layzell",
     author_email="nika@thelayzells.com",
     description="Efficiently update, split, and rearrange git commits",
