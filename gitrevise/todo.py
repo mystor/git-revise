@@ -121,7 +121,9 @@ def autosquash_todos(todos: List[Step]) -> List[Step]:
         found = None
         needle = summary.split(maxsplit=1)[1]
         for idx, target in enumerate(new_todos):
-            if target.commit.summary().startswith(needle):
+            if target.commit.summary().startswith(
+                needle
+            ) or target.commit.oid.hex().startswith(needle):
                 found = idx
                 break
 
