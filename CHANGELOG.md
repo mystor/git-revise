@@ -1,5 +1,11 @@
 # Changelog
 
+## vNEXT
+
+* Manpage is now installed in `share/man/man1` instead of `man/man1` (#62)
+* Which patch failed to apply is now included in the conflict editor (#53)
+* Trailing whitespaces are no longer generated for empty comment lines (#50)
+
 ## v0.5.1
 
 * Support non-ASCII branchnames. (#48)
