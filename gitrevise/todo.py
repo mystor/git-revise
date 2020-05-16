@@ -107,7 +107,7 @@ def validate_todos(old: List[Step], new: List[Step]):
 def autosquash_todos(todos: List[Step]) -> List[Step]:
     new_todos = todos[:]
 
-    for step in reversed(todos):
+    for step in todos:
         # Check if this is a fixup! or squash! commit, and ignore it otherwise.
         summary = step.commit.summary()
         if summary.startswith("fixup! "):

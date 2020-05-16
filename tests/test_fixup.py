@@ -181,3 +181,56 @@ def test_autosquash_nonhead(repo):
     assert new.persisted, "commit persisted to disk"
     assert new.author == old.author, "author is unchanged"
     assert new.committer == repo.default_committer, "committer is updated"
+
+    file1 = new.tree().entries[b"file1"].blob().body
+    assert file1 == b"hello, world\n"
+    file2 = new.tree().entries[b"file2"].blob().body
+    assert file2 == b"second file\nextra line\n"
+
+
+def test_fixup_of_fixup(repo):
+    bash(
+        """
+        echo "hello, world" > file1
+        git add file1
+        git commit -m "commit one"
+
+        echo "second file" > file2
+        git add file2
+        git commit -m "commit two"
+
+        echo "new line!" >> file1
+        git add file1
+        git commit -m "commit three"
+
+        echo "extra line" >> file2
+        git add file2
+        git commit --fixup=HEAD~
+
+        echo "even more" >> file2
+        git add file2
+        git commit --fixup=HEAD
+        """
+    )
+
+    old = repo.get_commit("HEAD~~~")
+    assert old.persisted
+
+    main(["--autosquash", str(old.parent().oid)])
+
+    new = repo.get_commit("HEAD~")
+    assert old != new, "commit was modified"
+    assert old.parents() == new.parents(), "parents are unchanged"
+
+    assert old.tree() != new.tree(), "tree is changed"
+
+    assert new.message == old.message, "message should not be changed"
+
+    assert new.persisted, "commit persisted to disk"
+    assert new.author == old.author, "author is unchanged"
+    assert new.committer == repo.default_committer, "committer is updated"
+
+    file1 = new.tree().entries[b"file1"].blob().body
+    assert file1 == b"hello, world\n"
+    file2 = new.tree().entries[b"file2"].blob().body
+    assert file2 == b"second file\nextra line\neven more\n"
