@@ -42,6 +42,10 @@ General options
 
    Stage changes to tracked files before revising.
 
+.. option:: -p, --patch
+
+   Interactively stage hunks from the worktree before revising.
+
 .. option:: --no-index
 
    Ignore staged changes in the index.

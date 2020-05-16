@@ -62,6 +62,12 @@ def build_parser() -> ArgumentParser:
         action="store_true",
         help="stage all tracked files before running",
     )
+    index_group.add_argument(
+        "--patch",
+        "-p",
+        action="store_true",
+        help="interactively stage hunks before running",
+    )
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
@@ -180,9 +186,11 @@ def noninteractive(
 
 
 def inner_main(args: Namespace, repo: Repository):
-    # If '-a' was specified, stage all changes.
+    # If '-a' or '-p' was specified, stage changes.
     if args.all:
         repo.git("add", "-u")
+    if args.patch:
+        repo.git("add", "-p")
 
     # Create a commit with changes from the index
     staged = None
