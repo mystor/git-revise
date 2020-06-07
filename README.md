@@ -29,7 +29,7 @@ managers (Thanks!)
 #### macOS Homebrew
 
 ```sh
-$ brew install git-revise 
+$ brew install git-revise
 ```
 
 ## Documentation

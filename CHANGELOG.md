@@ -1,6 +1,6 @@
 # Changelog
 
-## vNEXT
+## v0.6.0
 
 * Fixed handling of fixup-of-fixup commits (#58)
 * Added support for `git add`'s `--patch` flag (#61)
@@ -27,7 +27,7 @@
 
 * Fixes a bug where the tempdir path is set incorrectly when run from a
   subdirectory.
-  
+
 ## v0.4.1
 
 * Improved the performance and UX for the `cut` command.
