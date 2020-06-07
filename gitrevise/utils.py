@@ -5,6 +5,7 @@ import textwrap
 import sys
 import shlex
 import os
+import re
 
 from .odb import Repository, Commit, Tree, Oid, Reference
 
@@ -56,9 +57,8 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
     return base, commits
 
 
-def edit_file(repo: Repository, path: Path) -> bytes:
+def edit_file_with_editor(editor: str, path: Path) -> bytes:
     try:
-        editor = repo.git("var", "GIT_EDITOR").decode()
         if os.name == "nt":
             # The popular "Git for Windows" distribution uses a bundled msys
             # bash executable which is generally used to invoke GIT_EDITOR.
@@ -92,10 +92,23 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
-def strip_comments(data: bytes, commentchar: bytes) -> bytes:
+def strip_comments(
+    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
+) -> bytes:
+    if allow_preceding_whitespace:
+        pat_is_comment_line = re.compile(br"^\s*" + re.escape(commentchar))
+
+        def is_comment_line(line):
+            return re.match(pat_is_comment_line, line)
+
+    else:
+
+        def is_comment_line(line):
+            return line.startswith(commentchar)
+
     lines = b""
     for line in data.splitlines(keepends=True):
-        if not line.startswith(commentchar):
+        if not is_comment_line(line):
             lines += line
 
     lines = lines.rstrip()
@@ -104,12 +117,14 @@ def strip_comments(data: bytes, commentchar: bytes) -> bytes:
     return lines
 
 
-def run_editor(
+def run_specific_editor(
+    editor: str,
     repo: Repository,
     filename: str,
     text: bytes,
     comments: Optional[str] = None,
     allow_empty: bool = False,
+    allow_whitespace_before_comments: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
     path = repo.get_tempdir() / filename
@@ -127,14 +142,75 @@ def run_editor(
                 handle.write(b"\n")
 
     # Invoke the editor
-    data = edit_file(repo, path)
+    data = edit_file_with_editor(editor, path)
     if comments:
-        data = strip_comments(data, commentchar)
+        data = strip_comments(
+            data,
+            commentchar,
+            allow_preceding_whitespace=allow_whitespace_before_comments,
+        )
 
     # Produce an error if the file was empty
     if not (allow_empty or data):
         raise EditorError("empty file - aborting")
     return data
+
+
+def git_editor(repo: Repository) -> str:
+    return repo.git("var", "GIT_EDITOR").decode()
+
+
+def edit_file(repo: Repository, path: Path) -> bytes:
+    return edit_file_with_editor(git_editor(repo), path)
+
+
+def run_editor(
+    repo: Repository,
+    filename: str,
+    text: bytes,
+    comments: Optional[str] = None,
+    allow_empty: bool = False,
+) -> bytes:
+    """Run the editor configured for git to edit the given text"""
+    return run_specific_editor(
+        editor=git_editor(repo),
+        repo=repo,
+        filename=filename,
+        text=text,
+        comments=comments,
+        allow_empty=allow_empty,
+    )
+
+
+def git_sequence_editor(repo: Repository) -> str:
+    # This lookup order replicates the one used by git itself.
+    # See editor.c:sequence_editor.
+    editor = os.getenv("SEQUENCE_EDITOR")
+    if editor is None:
+        editor_bytes = repo.config("sequence.editor", default=None)
+        editor = editor_bytes.decode() if editor_bytes is not None else None
+    if editor is None:
+        editor = git_editor(repo)
+    return editor
+
+
+def run_sequence_editor(
+    repo: Repository,
+    filename: str,
+    text: bytes,
+    comments: Optional[str] = None,
+    allow_empty: bool = False,
+) -> bytes:
+    """Run the editor configured for git to edit the given rebase/revise sequence"""
+    return run_specific_editor(
+        editor=git_sequence_editor(repo),
+        repo=repo,
+        filename=filename,
+        text=text,
+        comments=comments,
+        allow_empty=allow_empty,
+        allow_whitespace_before_comments=True,
+    )
 
 
 def edit_commit_message(commit: Commit) -> Commit:
