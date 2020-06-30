@@ -32,6 +32,12 @@ managers (Thanks!)
 $ brew install git-revise
 ```
 
+#### Fedora
+
+```sh
+$ dnf install git-revise
+```
+
 ## Documentation
 
 Documentation, including usage and examples, is hosted on [Read the Docs].
