@@ -185,7 +185,7 @@ def run_editor(
 def git_sequence_editor(repo: Repository) -> str:
     # This lookup order replicates the one used by git itself.
     # See editor.c:sequence_editor.
-    editor = os.getenv("SEQUENCE_EDITOR")
+    editor = os.getenv("GIT_SEQUENCE_EDITOR")
     if editor is None:
         editor_bytes = repo.config("sequence.editor", default=None)
         editor = editor_bytes.decode() if editor_bytes is not None else None
