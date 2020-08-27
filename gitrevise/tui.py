@@ -10,6 +10,7 @@ from .utils import (
     edit_commit_message,
     update_head,
     cut_commit,
+    sign_commit,
     local_commits,
 )
 from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
@@ -87,6 +88,18 @@ def build_parser() -> ArgumentParser:
         "-c",
         action="store_true",
         help="interactively cut a commit into two smaller commits",
+    )
+
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--gpg-sign",
+        "-S",
+        help="GPG sign commits",
+    )
+    mode_group.add_argument(
+        "--no-gpg-sign",
+        action="store_true",
+        help="do not GPG sign commits",
     )
     return parser
 
@@ -172,6 +185,9 @@ def noninteractive(
     if args.cut:
         current = cut_commit(current)
 
+    if repo.sign_commits and not hasattr(current, "gpgsig"):
+        current = sign_commit(current)
+
     if current != replaced:
         print(f"{current.oid.short()} {current.summary()}")
 
@@ -191,6 +207,13 @@ def inner_main(args: Namespace, repo: Repository):
         repo.git("add", "-u")
     if args.patch:
         repo.git("add", "-p")
+
+    if args.gpg_sign is not None:
+        repo.sign_commits = True
+        if args.gpg_sign:
+            repo.key_id = args.gpg_sign
+    if args.no_gpg_sign:
+        repo.sign_commits = False
 
     # Create a commit with changes from the index
     staged = None
@@ -212,6 +235,14 @@ def inner_main(args: Namespace, repo: Repository):
 
 
 def main(argv: Optional[List[str]] = None):
+    if argv is None:
+        argv = sys.argv[1:]
+        for i, arg in enumerate(argv):
+            if arg == "--":
+                break
+            if arg.endswith("-S") or arg == "--gpg-sign":
+                argv[i] += "="
+
     args = build_parser().parse_args(argv)
     try:
         with Repository() as repo:

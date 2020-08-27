@@ -79,6 +79,12 @@ Reset target commit\(aqs author to the current user.
 .B \-\-ref <gitref>
 Working branch to update; defaults to \fBHEAD\fP\&.
 .UNINDENT
+.INDENT 0.0
+.TP
+\fB\-\-gpg-sign\fR, \fB\-S\fR, \fB\-\-no\-gpg\-sign
+GPG-sign commits.  To override the \fIcommit.gpgSign\fR git configuration, use
+\fI\-\-no\-gpg\-sign\fR.
+.UNINDENT
 .SS Main modes of operation
 .INDENT 0.0
 .TP
@@ -146,6 +152,14 @@ Configuration is managed by \fBgit\-config(1)\fP\&.
 If set to true, imply \fI\%\-\-autosquash\fP whenever \fI\%\-\-interactive\fP
 is specified. Overridden by \fI\%\-\-no\-autosquash\fP\&. Defaults to false. If
 not set, the value of \fBrebase.autoSquash\fP is used instead.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B revise.gpgSign
+If set to true, GPG-sign new commits; defaults to false.  This setting
+overrides the original git configuration \fBcommit.gpgSign\fR and may be
+overridden by the command line options \fI\-\-gpg\-sign\fR and
+\fI\-\-no\-gpg\-sign\fR.
 .UNINDENT
 .SH CONFLICT RESOLUTION
 .sp

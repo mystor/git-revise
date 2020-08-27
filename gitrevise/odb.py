@@ -17,6 +17,7 @@ from typing import (
     Tuple,
     cast,
 )
+import sys
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
@@ -134,6 +135,15 @@ class Repository:
     index: "Index"
     """current index state"""
 
+    sign_commits: bool
+    """sign commits with gpg"""
+
+    key_id: bytes
+    """key ID to be used for commit signing"""
+
+    gpg: bytes
+    """path to GnuPG binary"""
+
     _objects: Dict[int, Dict[Oid, "GitObj"]]
     _catfile: Popen
     _tempdir: Optional[TemporaryDirectory]
@@ -144,6 +154,9 @@ class Repository:
         "default_author",
         "default_committer",
         "index",
+        "sign_commits",
+        "key_id",
+        "gpg",
         "_objects",
         "_catfile",
         "_tempdir",
@@ -161,6 +174,22 @@ class Repository:
         self.default_committer = Signature(self.git("var", "GIT_COMMITTER_IDENT"))
 
         self.index = Index(self)
+
+        self.sign_commits = self.bool_config(
+            "revise.gpgSign", default=self.bool_config("commit.gpgSign", default=False)
+        )
+
+        self.key_id = self.default_committer.name
+        if self.default_committer.email:
+            if self.key_id:
+                self.key_id += b" "
+                self.key_id += b"<" + self.default_committer.email + b">"
+            else:
+                self.key_id = self.default_committer.email
+
+        self.key_id = self.config("user.signingKey", default=self.key_id)
+
+        self.gpg = self.config("gpg.program", default=b"gpg")
 
         self._catfile = Popen(
             ["git", "cat-file", "--batch"],
@@ -270,8 +299,28 @@ class Repository:
             body += b"parent " + parent.oid.hex().encode() + b"\n"
         body += b"author " + author + b"\n"
         body += b"committer " + committer + b"\n"
-        body += b"\n"
-        body += message
+
+        body_tail = b"\n" + message
+
+        if self.sign_commits:
+            try:
+                gpg = run(
+                    [self.gpg, "-bsau", self.key_id],
+                    stdout=PIPE,
+                    stderr=PIPE,
+                    input=body + body_tail,
+                    check=True,
+                )
+                body += b"gpgsig " + gpg.stdout.replace(b"\n", b"\n ")
+                body = body[:-1]
+
+            except CalledProcessError as gpg:
+                print(gpg.stderr.decode(), file=sys.stderr, end="")
+                print("gpg failed to sign commit", file=sys.stderr)
+                sys.exit(1)
+
+        body += body_tail
+
         return Commit(self, body)
 
     def new_tree(self, entries: Mapping[bytes, "Entry"]) -> "Tree":
@@ -470,10 +519,13 @@ class Commit(GitObj):
     committer: Signature
     """:class:`Signature` of this commit's committer"""
 
+    gpgsig: bytes
+    """GPG signature of this commit"""
+
     message: bytes
     """Body of this commit's message"""
 
-    __slots__ = ("tree_oid", "parent_oids", "author", "committer", "message")
+    __slots__ = ("tree_oid", "parent_oids", "author", "committer", "gpgsig", "message")
 
     def _parse_body(self):
         # Split the header from the core commit message.
@@ -495,6 +547,8 @@ class Commit(GitObj):
                 self.author = Signature(value)
             elif key == b"committer":
                 self.committer = Signature(value)
+            elif key == b"gpgsig":
+                self.gpgsig = value
 
     def tree(self) -> "Tree":
         """``tree`` object corresponding to this commit"""

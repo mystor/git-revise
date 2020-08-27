@@ -295,3 +295,11 @@ def cut_commit(commit: Commit) -> Commit:
     part2 = edit_commit_message(part2)
 
     return part2
+
+
+def sign_commit(commit: Commit) -> Commit:
+    """Sign the given commit with GPG and return the modified commit."""
+
+    return commit.repo.new_commit(
+        commit.tree(), commit.parents(), message=commit.message
+    )
