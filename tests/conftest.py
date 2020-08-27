@@ -4,7 +4,9 @@ import pytest
 import shutil
 import shlex
 import os
+import py.path
 import sys
+import tempfile
 import textwrap
 import subprocess
 import traceback
@@ -74,6 +76,12 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
 def repo(hermetic_seal):
     with Repository() as repo:
         yield repo
+
+
+@pytest.fixture
+def short_tmpdir():
+    with tempfile.TemporaryDirectory() as tdir:
+        yield py.path.local(tdir)
 
 
 @contextmanager

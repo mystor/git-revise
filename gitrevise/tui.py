@@ -88,6 +88,19 @@ def build_parser() -> ArgumentParser:
         action="store_true",
         help="interactively cut a commit into two smaller commits",
     )
+
+    gpg_group = parser.add_mutually_exclusive_group()
+    gpg_group.add_argument(
+        "--gpg-sign",
+        "-S",
+        action="store_true",
+        help="GPG sign commits",
+    )
+    gpg_group.add_argument(
+        "--no-gpg-sign",
+        action="store_true",
+        help="do not GPG sign commits",
+    )
     return parser
 
 
@@ -172,11 +185,20 @@ def noninteractive(
     if args.cut:
         current = cut_commit(current)
 
-    if current != replaced:
+    # Add or remove GPG signatures.
+    if repo.sign_commits != bool(current.gpgsig):
+        current = current.update(recommit=True)
+    change_signature = any(
+        repo.sign_commits != bool(commit.gpgsig) for commit in to_rebase
+    )
+
+    if current != replaced or change_signature:
         print(f"{current.oid.short()} {current.summary()}")
 
         # Rebase commits atop the commit range.
         for commit in to_rebase:
+            if repo.sign_commits != bool(commit.gpgsig):
+                commit = commit.update(recommit=True)
             current = commit.rebase(current)
             print(f"{current.oid.short()} {current.summary()}")
 
@@ -191,6 +213,11 @@ def inner_main(args: Namespace, repo: Repository) -> None:
         repo.git("add", "-u")
     if args.patch:
         repo.git("add", "-p")
+
+    if args.gpg_sign:
+        repo.sign_commits = True
+    if args.no_gpg_sign:
+        repo.sign_commits = False
 
     # Create a commit with changes from the index
     staged = None
