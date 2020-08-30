@@ -70,7 +70,7 @@ def edit_file_with_editor(editor: str, path: Path) -> bytes:
             cmd = ["sh", "-c", f'{editor} "$@"', editor, path.name]
         run(cmd, check=True, cwd=path.parent)
     except CalledProcessError as err:
-        raise EditorError(f"Editor exited with status {err}")
+        raise EditorError(f"Editor exited with status {err}") from err
     return path.read_bytes()
 
 
@@ -85,8 +85,10 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
                 pass
         try:
             return chars[:1]
-        except IndexError:
-            raise EditorError("Unable to automatically select a comment character")
+        except IndexError as err:
+            raise EditorError(
+                "Unable to automatically select a comment character"
+            ) from err
     if commentchar == b"":
         raise EditorError("core.commentChar must not be empty")
     return commentchar
