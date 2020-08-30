@@ -103,8 +103,6 @@ def test_fixup_nonhead_editor(basic_repo):
 
 
 def test_fixup_nonhead_conflict(basic_repo):
-    import textwrap
-
     bash('echo "conflict" > file1')
     bash("git add file1")
 
