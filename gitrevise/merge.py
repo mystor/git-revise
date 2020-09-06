@@ -204,7 +204,7 @@ def merge_blobs(
         print(f"Conflict applying '{labels[2]}'")
         print(f"  Path: '{path}'")
         if input("  Edit conflicted file? (Y/n) ").lower() == "n":
-            raise MergeConflict("user aborted")
+            raise MergeConflict("user aborted")  # pylint: disable=W0707
 
         # Open the editor on the conflicted file. We ensure the relative path
         # matches the path of the original file for a better editor experience.
@@ -222,6 +222,6 @@ def merge_blobs(
 
         # Was the merge successful?
         if input("  Merge successful? (y/N) ").lower() != "y":
-            raise MergeConflict("user aborted")
+            raise MergeConflict("user aborted")  # pylint: disable=W0707
 
     return Blob(current.repo, merged)
