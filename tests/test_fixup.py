@@ -1,6 +1,8 @@
 # pylint: skip-file
 
 from conftest import *
+from gitrevise.utils import commit_range
+from gitrevise.todo import CyclicFixupError, build_todos, autosquash_todos
 import os
 
 
@@ -276,3 +278,74 @@ def test_fixup_by_id(repo):
     assert file1 == b"hello, world\n"
     file2 = new.tree().entries[b"file2"].blob().body
     assert file2 == b"second file\nextra line\n"
+
+
+def test_fixup_order(repo):
+    bash(
+        """
+        git commit --allow-empty -m 'old'
+        git commit --allow-empty -m 'target commit'
+        git commit --allow-empty -m 'first fixup'  --fixup=HEAD
+        git commit --allow-empty -m 'second fixup' --fixup=HEAD~
+        """
+    )
+
+    old = repo.get_commit("HEAD~3")
+    assert old.persisted
+    tip = repo.get_commit("HEAD")
+    assert tip.persisted
+
+    todos = build_todos(commit_range(old, tip), index=None)
+    [target, first, second] = autosquash_todos(todos)
+
+    assert b"target commit" in target.commit.message
+    assert b"first fixup" in first.commit.message
+    assert b"second fixup" in second.commit.message
+
+
+def test_fixup_order_transitive(repo):
+    bash(
+        """
+        git commit --allow-empty -m 'old'
+        git commit --allow-empty -m 'target commit'
+        git commit --allow-empty -m '1.0' --fixup=HEAD
+        git commit --allow-empty -m '1.1' --fixup=HEAD
+        git commit --allow-empty -m '2.0' --fixup=HEAD~2
+        """
+    )
+
+    old = repo.get_commit("HEAD~4")
+    assert old.persisted
+    tip = repo.get_commit("HEAD")
+    assert tip.persisted
+
+    todos = build_todos(commit_range(old, tip), index=None)
+    [target, a, b, c] = autosquash_todos(todos)
+
+    assert b"target commit" in target.commit.message
+    assert b"1.0" in a.commit.message
+    assert b"1.1" in b.commit.message
+    assert b"2.0" in c.commit.message
+
+
+def test_fixup_order_cycle(repo):
+    bash(
+        """
+        git commit --allow-empty -m 'old'
+        git commit --allow-empty -m 'target commit'
+        git commit --allow-empty -m 'fixup! fixup!'
+        """
+    )
+
+    old = repo.get_commit("HEAD~2")
+    assert old.persisted
+    tip = repo.get_commit("HEAD")
+    assert tip.persisted
+
+    todos = build_todos(commit_range(old, tip), index=None)
+
+    try:
+        autosquash_todos(todos)
+        assert False, "Should raise an error on cyclic fixup graphs"
+    except CyclicFixupError:
+        pass

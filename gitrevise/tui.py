@@ -12,7 +12,13 @@ from .utils import (
     cut_commit,
     local_commits,
 )
-from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
+from .todo import (
+    CyclicFixupError,
+    apply_todos,
+    build_todos,
+    edit_todos,
+    autosquash_todos,
+)
 from .merge import MergeConflict
 from . import __version__
 
@@ -218,6 +224,9 @@ def main(argv: Optional[List[str]] = None):
             inner_main(args, repo)
     except CalledProcessError as err:
         print(f"subprocess exited with non-zero status: {err.returncode}")
+        sys.exit(1)
+    except CyclicFixupError as err:
+        print(f"todo error: {err}")
         sys.exit(1)
     except EditorError as err:
         print(f"editor error: {err}")
