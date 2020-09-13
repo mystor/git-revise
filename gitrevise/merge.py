@@ -175,6 +175,58 @@ def merge_blobs(
     repo = current.repo
 
     tmpdir = repo.get_tempdir()
+
+    annotated_labels = (
+        f"{path} (new parent): {labels[0]}",
+        f"{path} (old parent): {labels[1]}",
+        f"{path} (current): {labels[2]}",
+    )
+    (is_clean_merge, merged) = merge_files(
+        annotated_labels, current, base, other, tmpdir
+    )
+
+    if is_clean_merge:
+        # No conflicts.
+        return Blob(repo, merged)
+
+    # At this point, we know that there are merge conflicts to resolve.
+    # Prompt to try and trigger manual resolution.
+    print(f"Conflict applying '{labels[2]}'")
+    print(f"  Path: '{path}'")
+    if input("  Edit conflicted file? (Y/n) ").lower() == "n":
+        raise MergeConflict("user aborted")  # pylint: disable=W0707
+
+    # Open the editor on the conflicted file. We ensure the relative path
+    # matches the path of the original file for a better editor experience.
+    conflicts = tmpdir / "conflict" / path.relative_to("/")
+    conflicts.parent.mkdir(parents=True, exist_ok=True)
+    conflicts.write_bytes(preimage)
+    preimage = merged
+    merged = edit_file(repo, conflicts)
+
+    # Print warnings if the merge looks like it may have failed.
+    if merged == preimage:
+        print("(note) conflicted file is unchanged")
+
+    if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
+        print("(note) conflict markers found in the merged file")
+
+    # Was the merge successful?
+    if input("  Merge successful? (y/N) ").lower() != "y":
+        raise MergeConflict("user aborted")  # pylint: disable=W0707
+
+    return Blob(current.repo, merged)
+
+
+def merge_files(
+    labels: Tuple[str, str, str],
+    current: Blob,
+    base: Optional[Blob],
+    other: Blob,
+    tmpdir: Path,
+) -> Tuple[bool, bytes]:
+    repo = current.repo
+
     (tmpdir / "current").write_bytes(current.body)
     (tmpdir / "base").write_bytes(base.body if base else b"")
     (tmpdir / "other").write_bytes(other.body)
@@ -185,43 +237,20 @@ def merge_blobs(
             "merge-file",
             "-q",
             "-p",
-            f"-L{path} (new parent): {labels[0]}",
-            f"-L{path} (old parent): {labels[1]}",
-            f"-L{path} (current): {labels[2]}",
+            f"-L{labels[0]}",
+            f"-L{labels[1]}",
+            f"-L{labels[2]}",
             str(tmpdir / "current"),
             str(tmpdir / "base"),
             str(tmpdir / "other"),
             trim_newline=False,
         )
+
+        return (True, merged)  # Successful merge
     except CalledProcessError as err:
         # The return code is the # of conflicts if there are conflicts, and
         # negative if there is an error.
         if err.returncode < 0:
             raise
 
-        # At this point, we know that there are merge conflicts to resolve.
-        # Prompt to try and trigger manual resolution.
-        print(f"Conflict applying '{labels[2]}'")
-        print(f"  Path: '{path}'")
-        if input("  Edit conflicted file? (Y/n) ").lower() == "n":
-            raise MergeConflict("user aborted")  # pylint: disable=W0707
-
-        # Open the editor on the conflicted file. We ensure the relative path
-        # matches the path of the original file for a better editor experience.
-        conflicts = tmpdir / "conflict" / path.relative_to("/")
-        conflicts.parent.mkdir(parents=True, exist_ok=True)
-        conflicts.write_bytes(err.output)
-        merged = edit_file(repo, conflicts)
-
-        # Print warnings if the merge looks like it may have failed.
-        if merged == err.output:
-            print("(note) conflicted file is unchanged")
-
-        if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
-            print("(note) conflict markers found in the merged file")
-
-        # Was the merge successful?
-        if input("  Merge successful? (y/N) ").lower() != "y":
-            raise MergeConflict("user aborted")  # pylint: disable=W0707
-
-    return Blob(current.repo, merged)
+        return (False, err.output)  # Conflicted merge
