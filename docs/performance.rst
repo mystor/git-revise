@@ -51,7 +51,7 @@ To avoid spawning unnecessary subprocesses and hitting disk too frequently,
 :command:`git revise` uses an in-memory cache of objects in the ODB which it
 has already seen.
 
-Intermediate git trees, blobs, and commits created during processing are helds
+Intermediate git trees, blobs, and commits created during processing are held
 exclusively in-memory, and only persisted when necessary.
 
 
