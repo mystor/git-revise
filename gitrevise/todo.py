@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from .odb import Commit, Oid, Repository
 from .utils import run_editor, run_sequence_editor, edit_commit_message, cut_commit
@@ -104,23 +104,14 @@ def validate_todos(old: List[Step], new: List[Step]):
             raise ValueError("'index' actions follow all non-index todo items")
 
 
-class CyclicFixupError(Exception):
-    pass
-
-
-def count_fixup_commits(
-    fixups: Dict[Oid, List[Oid]], visited: Set[Oid], node: Oid
-) -> int:
-    if node in visited:
-        raise CyclicFixupError(f"fixups would create cycle in {node}")
-    visited.add(node)
+def count_fixup_commits(fixups: Dict[Oid, List[Oid]], node: Oid) -> int:
     return 1 + sum(
-        count_fixup_commits(fixups, visited, fixup) for fixup in fixups.get(node, [])
+        count_fixup_commits(fixups, commit) for commit in fixups.get(node, ())
     )
 
 
 def autosquash_todos(todos: List[Step]) -> List[Step]:
-    new_todos = todos[:]
+    new_todos: List[Step] = []
     fixups: Dict[Oid, List[Oid]] = {}
 
     for step in todos:
@@ -131,6 +122,7 @@ def autosquash_todos(todos: List[Step]) -> List[Step]:
         elif summary.startswith("squash! "):
             kind = StepKind.SQUASH
         else:
+            new_todos.append(step)
             continue
 
         # Locate a matching commit
@@ -141,21 +133,17 @@ def autosquash_todos(todos: List[Step]) -> List[Step]:
                 needle
             ) or target.commit.oid.hex().startswith(needle):
                 found = idx
+                transitive_fixup_count = count_fixup_commits(fixups, target.commit.oid)
                 if target.commit.oid not in fixups:
                     fixups[target.commit.oid] = []
                 fixups[target.commit.oid] += [step.commit.oid]
-                number_of_transitive_fixup_commits = (
-                    count_fixup_commits(fixups, set(), target.commit.oid) - 1
-                )
                 break
 
-        if found is not None:
+        if found is None:
+            new_todos.append(step)
+        else:
             # Insert a new `fixup` or `squash` step in the correct place.
-            new_todos.insert(
-                found + number_of_transitive_fixup_commits, Step(kind, step.commit)
-            )
-            # Remove the existing step.
-            new_todos.remove(step)
+            new_todos.insert(found + transitive_fixup_count, Step(kind, step.commit))
 
     return new_todos
 

@@ -2,7 +2,7 @@
 
 from conftest import *
 from gitrevise.utils import commit_range
-from gitrevise.todo import CyclicFixupError, build_todos, autosquash_todos
+from gitrevise.todo import StepKind, build_todos, autosquash_todos
 import os
 
 
@@ -332,20 +332,19 @@ def test_fixup_order_cycle(repo):
     bash(
         """
         git commit --allow-empty -m 'old'
-        git commit --allow-empty -m 'target commit'
-        git commit --allow-empty -m 'fixup! fixup!'
+        git commit --allow-empty -m 'fixup! fixup!' # Cannot fixup self.
+        git commit --allow-empty -m 'fixup! future commit' # Cannot fixup future commit.
+        git commit --allow-empty -m 'future commit'
         """
     )
 
-    old = repo.get_commit("HEAD~2")
+    old = repo.get_commit("HEAD~3")
     assert old.persisted
     tip = repo.get_commit("HEAD")
     assert tip.persisted
 
     todos = build_todos(commit_range(old, tip), index=None)
 
-    try:
-        autosquash_todos(todos)
-        assert False, "Should raise an error on cyclic fixup graphs"
-    except CyclicFixupError:
-        pass
+    new_todos = autosquash_todos(todos)
+    assert len(new_todos) == 3
+    assert all(step.kind == StepKind.PICK for step in new_todos)
