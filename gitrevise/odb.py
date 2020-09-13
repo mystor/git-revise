@@ -183,7 +183,7 @@ class Repository:
         *cmd: str,
         cwd: Optional[Path] = None,
         stdin: Optional[bytes] = None,
-        newline: bool = True,
+        trim_newline: bool = True,
         env: Dict[str, str] = None,
         nocapture: bool = False,
     ) -> bytes:
@@ -202,7 +202,7 @@ class Repository:
 
         if nocapture:
             return b""
-        if newline and prog.stdout.endswith(b"\n"):
+        if trim_newline and prog.stdout.endswith(b"\n"):
             return prog.stdout[:-1]
         return prog.stdout
 
@@ -715,7 +715,7 @@ class Index:
         *cmd: str,
         cwd: Optional[Path] = None,
         stdin: Optional[bytes] = None,
-        newline: bool = True,
+        trim_newline: bool = True,
         env: Optional[Mapping[str, str]] = None,
         nocapture: bool = False,
     ) -> bytes:
@@ -723,7 +723,12 @@ class Index:
         env = dict(**env) if env is not None else dict(**os.environ)
         env["GIT_INDEX_FILE"] = str(self.index_file)
         return self.repo.git(
-            *cmd, cwd=cwd, stdin=stdin, newline=newline, env=env, nocapture=nocapture
+            *cmd,
+            cwd=cwd,
+            stdin=stdin,
+            trim_newline=trim_newline,
+            env=env,
+            nocapture=nocapture,
         )
 
     def tree(self) -> Tree:

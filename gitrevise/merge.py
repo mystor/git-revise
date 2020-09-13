@@ -191,7 +191,7 @@ def merge_blobs(
             str(tmpdir / "current"),
             str(tmpdir / "base"),
             str(tmpdir / "other"),
-            newline=False,
+            trim_newline=False,
         )
     except CalledProcessError as err:
         # The return code is the # of conflicts if there are conflicts, and
