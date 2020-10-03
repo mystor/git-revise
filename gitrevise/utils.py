@@ -100,12 +100,12 @@ def strip_comments(
     if allow_preceding_whitespace:
         pat_is_comment_line = re.compile(br"^\s*" + re.escape(commentchar))
 
-        def is_comment_line(line):
-            return re.match(pat_is_comment_line, line)
+        def is_comment_line(line: bytes) -> bool:
+            return bool(re.match(pat_is_comment_line, line))
 
     else:
 
-        def is_comment_line(line):
+        def is_comment_line(line: bytes) -> bool:
             return line.startswith(commentchar)
 
     lines = b""
@@ -235,7 +235,7 @@ def edit_commit_message(commit: Commit) -> Commit:
     return commit.update(message=message)
 
 
-def update_head(ref: Reference[Commit], new: Commit, expected: Optional[Tree]):
+def update_head(ref: Reference[Commit], new: Commit, expected: Optional[Tree]) -> None:
     # Update the HEAD commit to point to the new value.
     target_oid = ref.target.oid if ref.target else Oid.null()
     print(f"Updating {ref.name} ({target_oid} => {new.oid})")

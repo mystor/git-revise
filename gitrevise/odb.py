@@ -28,7 +28,7 @@ from tempfile import TemporaryDirectory
 class MissingObject(Exception):
     """Exception raised when a commit cannot be found in the ODB"""
 
-    def __init__(self, ref: str):
+    def __init__(self, ref: str) -> None:
         Exception.__init__(self, f"Object {ref} does not exist")
 
 
@@ -60,7 +60,7 @@ class Oid(bytes):
         return str(self)[:12]
 
     @classmethod
-    def for_object(cls, tag: str, body: bytes):
+    def for_object(cls, tag: str, body: bytes) -> "Oid":
         """Hash an object with the given type tag and body to determine its Oid"""
         hasher = hashlib.sha1()
         hasher.update(tag.encode() + b" " + str(len(body)).encode() + b"\0" + body)
@@ -149,7 +149,7 @@ class Repository:
         "_tempdir",
     ]
 
-    def __init__(self, cwd: Optional[Path] = None):
+    def __init__(self, cwd: Optional[Path] = None) -> None:
         self._tempdir = None
 
         self.workdir = Path(self.git("rev-parse", "--show-toplevel", cwd=cwd).decode())
@@ -232,7 +232,7 @@ class Repository:
         exc_type: Optional[Type[BaseException]],
         exc_val: Optional[Exception],
         exc_tb: Optional[TracebackType],
-    ):
+    ) -> None:
         if self._tempdir:
             self._tempdir.__exit__(exc_type, exc_val, exc_tb)
 
@@ -404,11 +404,13 @@ class GitObj:
 
     __slots__ = ("repo", "body", "oid", "persisted")
 
-    def __new__(cls, repo: Repository, body: bytes):
+    def __new__(cls: Type[GitObjT], repo: Repository, body: bytes) -> GitObjT:
         oid = Oid.for_object(cls._git_type(), body)
         cache = repo._objects[oid[0]]  # pylint: disable=protected-access
         if oid in cache:
-            return cache[oid]
+            cached = cache[oid]
+            assert isinstance(cached, cls)
+            return cached
 
         self = super().__new__(cls)
         self.repo = repo
@@ -417,7 +419,7 @@ class GitObj:
         self.persisted = False
         cache[oid] = self
         self._parse_body()  # pylint: disable=protected-access
-        return self
+        return cast(GitObjT, self)
 
     @classmethod
     def _git_type(cls) -> str:
@@ -443,10 +445,10 @@ class GitObj:
         self.persisted = True
         return self.oid
 
-    def _persist_deps(self):
+    def _persist_deps(self) -> None:
         pass
 
-    def _parse_body(self):
+    def _parse_body(self) -> None:
         pass
 
     def __eq__(self, other: object) -> bool:
@@ -475,7 +477,7 @@ class Commit(GitObj):
 
     __slots__ = ("tree_oid", "parent_oids", "author", "committer", "message")
 
-    def _parse_body(self):
+    def _parse_body(self) -> None:
         # Split the header from the core commit message.
         hdrs, self.message = self.body.split(b"\n\n", maxsplit=1)
 
@@ -605,7 +607,7 @@ class Entry:
 
     __slots__ = ("repo", "mode", "oid")
 
-    def __init__(self, repo: Repository, mode: Mode, oid: Oid):
+    def __init__(self, repo: Repository, mode: Mode, oid: Oid) -> None:
         self.repo = repo
         self.mode = mode
         self.oid = oid
@@ -633,7 +635,7 @@ class Entry:
         if self.mode != Mode.GITLINK:
             self.repo.get_obj(self.oid).persist()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Entry {self.mode}, {self.oid}>"
 
     def __eq__(self, other: object) -> bool:
@@ -650,7 +652,7 @@ class Tree(GitObj):
 
     __slots__ = ("entries",)
 
-    def _parse_body(self):
+    def _parse_body(self) -> None:
         self.entries = {}
         rest = self.body
         while rest:
@@ -701,7 +703,7 @@ class Index:
     index_file: Path
     """Index file being referenced"""
 
-    def __init__(self, repo: Repository, index_file: Optional[Path] = None):
+    def __init__(self, repo: Repository, index_file: Optional[Path] = None) -> None:
         self.repo = repo
 
         if index_file is None:
@@ -768,13 +770,13 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
     # FIXME: On python 3.6, pylint doesn't know what to do with __slots__ here.
     # __slots__ = ("name", "target", "repo", "_type")
 
-    def __init__(self, obj_type: Type[GitObjT], repo: Repository, name: str):
+    def __init__(self, obj_type: Type[GitObjT], repo: Repository, name: str) -> None:
         self._type = obj_type
         self.name = repo.git("rev-parse", "--symbolic-full-name", name).decode()
         self.repo = repo
         self.refresh()
 
-    def refresh(self):
+    def refresh(self) -> None:
         """Re-read the target of this reference from disk"""
         try:
             obj = self.repo.get_obj(self.name)
@@ -788,7 +790,7 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
         except MissingObject:
             self.target = None
 
-    def update(self, new: GitObjT, reason: str):
+    def update(self, new: GitObjT, reason: str) -> None:
         """Update this refreence to point to a new object.
         An entry with the reason ``reason`` will be added to the reflog."""
         new.persist()

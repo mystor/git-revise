@@ -41,7 +41,7 @@ class Step:
     commit: Commit
     message: Optional[bytes]
 
-    def __init__(self, kind: StepKind, commit: Commit):
+    def __init__(self, kind: StepKind, commit: Commit) -> None:
         self.kind = kind
         self.commit = commit
         self.message = None
@@ -77,7 +77,7 @@ def build_todos(commits: List[Commit], index: Optional[Commit]) -> List[Step]:
     return steps
 
 
-def validate_todos(old: List[Step], new: List[Step]):
+def validate_todos(old: List[Step], new: List[Step]) -> None:
     """Raise an exception if the new todo list is malformed compared to the
     original todo list"""
     old_set = set(o.commit.oid for o in old)
@@ -201,7 +201,9 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
     return result
 
 
-def edit_todos(repo: Repository, todos: List[Step], msgedit=False) -> List[Step]:
+def edit_todos(
+    repo: Repository, todos: List[Step], msgedit: bool = False
+) -> List[Step]:
     if msgedit:
         return edit_todos_msgedit(repo, todos)
 

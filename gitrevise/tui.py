@@ -93,7 +93,7 @@ def build_parser() -> ArgumentParser:
 
 def interactive(
     args: Namespace, repo: Repository, staged: Optional[Commit], head: Reference[Commit]
-):
+) -> None:
     assert head.target is not None
 
     if args.target is None:
@@ -135,7 +135,7 @@ def enable_autosquash(args: Namespace, repo: Repository) -> bool:
 
 def noninteractive(
     args: Namespace, repo: Repository, staged: Optional[Commit], head: Reference[Commit]
-):
+) -> None:
     assert head.target is not None
 
     if args.target is None:
@@ -185,7 +185,7 @@ def noninteractive(
         print("(warning) no changes performed", file=sys.stderr)
 
 
-def inner_main(args: Namespace, repo: Repository):
+def inner_main(args: Namespace, repo: Repository) -> None:
     # If '-a' or '-p' was specified, stage changes.
     if args.all:
         repo.git("add", "-u")
@@ -211,7 +211,7 @@ def inner_main(args: Namespace, repo: Repository):
         noninteractive(args, repo, staged, head)
 
 
-def main(argv: Optional[List[str]] = None):
+def main(argv: Optional[List[str]] = None) -> None:
     args = build_parser().parse_args(argv)
     try:
         with Repository() as repo:
