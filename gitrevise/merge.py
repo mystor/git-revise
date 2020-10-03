@@ -185,7 +185,12 @@ def merge_blobs(
         f"{path} (current): {labels[2]}",
     )
     (is_clean_merge, merged) = merge_files(
-        annotated_labels, current, base, other, tmpdir
+        repo,
+        annotated_labels,
+        current.body,
+        base.body if base else b"",
+        other.body,
+        tmpdir,
     )
 
     if is_clean_merge:
@@ -205,7 +210,7 @@ def merge_blobs(
         return merged_blob
 
     if input("  Edit conflicted file? (Y/n) ").lower() == "n":
-        raise MergeConflict("user aborted")  # pylint: disable=W0707
+        raise MergeConflict("user aborted")
 
     # Open the editor on the conflicted file. We ensure the relative path
     # matches the path of the original file for a better editor experience.
@@ -223,7 +228,7 @@ def merge_blobs(
 
     # Was the merge successful?
     if input("  Merge successful? (y/N) ").lower() != "y":
-        raise MergeConflict("user aborted")  # pylint: disable=W0707
+        raise MergeConflict("user aborted")
 
     record_resolution(repo, conflict_id, normalized_preimage, merged)
 
@@ -231,17 +236,16 @@ def merge_blobs(
 
 
 def merge_files(
+    repo: Repository,
     labels: Tuple[str, str, str],
-    current: Blob,
-    base: Optional[Blob],
-    other: Blob,
+    current: bytes,
+    base: bytes,
+    other: bytes,
     tmpdir: Path,
 ) -> Tuple[bool, bytes]:
-    repo = current.repo
-
-    (tmpdir / "current").write_bytes(current.body)
-    (tmpdir / "base").write_bytes(base.body if base else b"")
-    (tmpdir / "other").write_bytes(other.body)
+    (tmpdir / "current").write_bytes(current)
+    (tmpdir / "base").write_bytes(base)
+    (tmpdir / "other").write_bytes(other)
 
     # Try running git merge-file to automatically resolve conflicts.
     try:
@@ -269,7 +273,7 @@ def merge_files(
 
 
 def replay_recorded_resolution(
-    repo, tmpdir: Path, preimage
+    repo: Repository, tmpdir: Path, preimage: bytes
 ) -> Tuple[bytes, Optional[str], Optional[Blob]]:
     rr_cache = repo.git_path("rr-cache")
     if not repo.bool_config(
@@ -298,14 +302,11 @@ def replay_recorded_resolution(
         return (normalized_preimage, conflict_id, None)
 
     (is_clean_merge, merged) = merge_files(
-        labels=(
-            "recorded postimage",
-            "recorded preimage",
-            "new preimage",
-        ),
-        current=Blob(repo, recorded_postimage),
-        base=Blob(repo, recorded_preimage),
-        other=Blob(repo, normalized_preimage),
+        repo,
+        labels=("recorded postimage", "recorded preimage", "new preimage"),
+        current=recorded_postimage,
+        base=recorded_preimage,
+        other=normalized_preimage,
         tmpdir=tmpdir,
     )
     if not is_clean_merge:
