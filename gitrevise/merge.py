@@ -10,11 +10,14 @@ files and generate. This algorithm, on the other hand, avoids looking at
 unmodified trees and blobs when possible.
 """
 
-from typing import Optional, Tuple, TypeVar
+from typing import Iterator, Optional, Tuple, TypeVar
 from pathlib import Path
 from subprocess import CalledProcessError
+import hashlib
+import os
+import sys
 
-from .odb import Tree, Blob, Commit, Entry, Mode
+from .odb import Tree, Blob, Commit, Entry, Mode, Repository
 from .utils import edit_file
 
 
@@ -175,6 +178,67 @@ def merge_blobs(
     repo = current.repo
 
     tmpdir = repo.get_tempdir()
+
+    annotated_labels = (
+        f"{path} (new parent): {labels[0]}",
+        f"{path} (old parent): {labels[1]}",
+        f"{path} (current): {labels[2]}",
+    )
+    (is_clean_merge, merged) = merge_files(
+        annotated_labels, current, base, other, tmpdir
+    )
+
+    if is_clean_merge:
+        # No conflicts.
+        return Blob(repo, merged)
+
+    # At this point, we know that there are merge conflicts to resolve.
+    # Prompt to try and trigger manual resolution.
+    print(f"Conflict applying '{labels[2]}'")
+    print(f"  Path: '{path}'")
+
+    preimage = merged
+    (normalized_preimage, conflict_id, merged_blob) = replay_recorded_resolution(
+        repo, tmpdir, preimage
+    )
+    if merged_blob is not None:
+        return merged_blob
+
+    if input("  Edit conflicted file? (Y/n) ").lower() == "n":
+        raise MergeConflict("user aborted")  # pylint: disable=W0707
+
+    # Open the editor on the conflicted file. We ensure the relative path
+    # matches the path of the original file for a better editor experience.
+    conflicts = tmpdir / "conflict" / path.relative_to("/")
+    conflicts.parent.mkdir(parents=True, exist_ok=True)
+    conflicts.write_bytes(preimage)
+    merged = edit_file(repo, conflicts)
+
+    # Print warnings if the merge looks like it may have failed.
+    if merged == preimage:
+        print("(note) conflicted file is unchanged")
+
+    if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
+        print("(note) conflict markers found in the merged file")
+
+    # Was the merge successful?
+    if input("  Merge successful? (y/N) ").lower() != "y":
+        raise MergeConflict("user aborted")  # pylint: disable=W0707
+
+    record_resolution(repo, conflict_id, normalized_preimage, merged)
+
+    return Blob(current.repo, merged)
+
+
+def merge_files(
+    labels: Tuple[str, str, str],
+    current: Blob,
+    base: Optional[Blob],
+    other: Blob,
+    tmpdir: Path,
+) -> Tuple[bool, bytes]:
+    repo = current.repo
+
     (tmpdir / "current").write_bytes(current.body)
     (tmpdir / "base").write_bytes(base.body if base else b"")
     (tmpdir / "other").write_bytes(other.body)
@@ -185,43 +249,162 @@ def merge_blobs(
             "merge-file",
             "-q",
             "-p",
-            f"-L{path} (new parent): {labels[0]}",
-            f"-L{path} (old parent): {labels[1]}",
-            f"-L{path} (current): {labels[2]}",
+            f"-L{labels[0]}",
+            f"-L{labels[1]}",
+            f"-L{labels[2]}",
             str(tmpdir / "current"),
             str(tmpdir / "base"),
             str(tmpdir / "other"),
-            newline=False,
+            trim_newline=False,
         )
+
+        return (True, merged)  # Successful merge
     except CalledProcessError as err:
         # The return code is the # of conflicts if there are conflicts, and
         # negative if there is an error.
         if err.returncode < 0:
             raise
 
-        # At this point, we know that there are merge conflicts to resolve.
-        # Prompt to try and trigger manual resolution.
-        print(f"Conflict applying '{labels[2]}'")
-        print(f"  Path: '{path}'")
-        if input("  Edit conflicted file? (Y/n) ").lower() == "n":
-            raise MergeConflict("user aborted")  # pylint: disable=W0707
+        return (False, err.output)  # Conflicted merge
 
-        # Open the editor on the conflicted file. We ensure the relative path
-        # matches the path of the original file for a better editor experience.
-        conflicts = tmpdir / "conflict" / path.relative_to("/")
-        conflicts.parent.mkdir(parents=True, exist_ok=True)
-        conflicts.write_bytes(err.output)
-        merged = edit_file(repo, conflicts)
 
-        # Print warnings if the merge looks like it may have failed.
-        if merged == err.output:
-            print("(note) conflicted file is unchanged")
+def replay_recorded_resolution(
+    repo, tmpdir: Path, preimage
+) -> Tuple[bytes, Optional[str], Optional[Blob]]:
+    rr_cache = repo.git_path("rr-cache")
+    if not repo.bool_config(
+        "revise.rerere",
+        default=repo.bool_config("rerere.enabled", default=rr_cache.is_dir()),
+    ):
+        return (b"", None, None)
 
-        if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
-            print("(note) conflict markers found in the merged file")
+    (normalized_preimage, conflict_id) = normalize_conflicted_file(preimage)
+    conflict_dir = rr_cache / conflict_id
+    if not conflict_dir.is_dir():
+        return (normalized_preimage, conflict_id, None)
+    if not repo.bool_config("rerere.autoUpdate", default=False):
+        # TODO: if this option is disabled, Git applies recorded resolutions to
+        # files but doesn't stage them. We should ask the user whether to apply
+        # them. Don't record resolutions for now by returning no conflict ID.
+        return (b"", None, None)
 
-        # Was the merge successful?
-        if input("  Merge successful? (y/N) ").lower() != "y":
-            raise MergeConflict("user aborted")  # pylint: disable=W0707
+    postimage_path = conflict_dir / "postimage"
+    preimage_path = conflict_dir / "preimage"
+    try:
+        recorded_postimage = postimage_path.read_bytes()
+        recorded_preimage = preimage_path.read_bytes()
+    except IOError as err:
+        print(f"(warning) failed to read git-rerere cache: {err}", file=sys.stderr)
+        return (normalized_preimage, conflict_id, None)
 
-    return Blob(current.repo, merged)
+    (is_clean_merge, merged) = merge_files(
+        labels=(
+            "recorded postimage",
+            "recorded preimage",
+            "new preimage",
+        ),
+        current=Blob(repo, recorded_postimage),
+        base=Blob(repo, recorded_preimage),
+        other=Blob(repo, normalized_preimage),
+        tmpdir=tmpdir,
+    )
+    if not is_clean_merge:
+        # We could ask the user to merge this. However, that could be confusing.
+        # Just fall back to letting them resolve the entire conflict.
+        return (normalized_preimage, conflict_id, None)
+
+    print("Successfully replayed recorded resolution")
+    # Mark that "postimage" was used to help git gc. See merge() in Git's rerere.c.
+    os.utime(postimage_path)
+    return (normalized_preimage, conflict_id, Blob(repo, merged))
+
+
+def record_resolution(
+    repo: Repository,
+    conflict_id: Optional[str],
+    normalized_preimage: bytes,
+    postimage: bytes,
+) -> None:
+    if conflict_id is None:
+        return
+
+    # TODO Lock {repo.gitdir}/MERGE_RR until everything is written.
+    print("Recording conflict resolution")
+    conflict_dir = repo.git_path("rr-cache") / conflict_id
+    try:
+        conflict_dir.mkdir(exist_ok=True, parents=True)
+        (conflict_dir / "preimage").write_bytes(normalized_preimage)
+        (conflict_dir / "postimage").write_bytes(postimage)
+    except IOError as err:
+        print(f"(warning) failed to write git-rerere cache: {err}", file=sys.stderr)
+
+
+class ConflictParseFailed(Exception):
+    pass
+
+
+def normalize_conflict(
+    lines: Iterator[bytes],
+    hasher: Optional["hashlib._Hash"],
+) -> bytes:
+    cur_hunk: Optional[bytes] = b""
+    other_hunk: Optional[bytes] = None
+    while True:
+        line = next(lines, None)
+        if line is None:
+            raise ConflictParseFailed("unexpected eof")
+        if line.startswith(b"<<<<<<<"):
+            # parse recursive conflicts, including their processed output in the current hunk
+            conflict = normalize_conflict(lines, None)
+            if cur_hunk is not None:
+                cur_hunk += conflict
+        elif line.startswith(b"|||||||"):
+            # ignore the diff3 original section. Must be still parsing the first hunk.
+            if other_hunk is not None:
+                raise ConflictParseFailed("unexpected ||||||| conflict marker")
+            (other_hunk, cur_hunk) = (cur_hunk, None)
+        elif line.startswith(b"======="):
+            # switch into the second hunk
+            # could be in either the diff3 original section or the first hunk
+            if cur_hunk is not None:
+                if other_hunk is not None:
+                    raise ConflictParseFailed("unexpected ======= conflict marker")
+                other_hunk = cur_hunk
+            cur_hunk = b""
+        elif line.startswith(b">>>>>>>"):
+            # end of conflict. update hasher, and return a normalized conflict
+            if cur_hunk is None or other_hunk is None:
+                raise ConflictParseFailed("unexpected >>>>>>> conflict marker")
+
+            (hunk1, hunk2) = sorted((cur_hunk, other_hunk))
+            if hasher:
+                hasher.update(hunk1 + b"\0")
+                hasher.update(hunk2 + b"\0")
+            return b"".join(
+                (
+                    b"<<<<<<<\n",
+                    hunk1,
+                    b"=======\n",
+                    hunk2,
+                    b">>>>>>>\n",
+                )
+            )
+        elif cur_hunk is not None:
+            # add non-marker lines to the current hunk (or discard if in
+            # the diff3 original section)
+            cur_hunk += line
+
+
+def normalize_conflicted_file(body: bytes) -> Tuple[bytes, str]:
+    hasher = hashlib.sha1()
+    normalized = b""
+
+    lines = iter(body.splitlines(keepends=True))
+    while True:
+        line = next(lines, None)
+        if line is None:
+            return (normalized, hasher.hexdigest())
+        if line.startswith(b"<<<<<<<"):
+            normalized += normalize_conflict(lines, hasher)
+        else:
+            normalized += line
