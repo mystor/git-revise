@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Jun 07, 2020" "0.6.0" "git-revise"
+.TH "GIT-REVISE" "1" "Oct 05, 2020" "0.6.0" "git-revise"
 .SH NAME
 git-revise \- Efficiently update, split, and rearrange git commits
 .
@@ -81,9 +81,9 @@ Working branch to update; defaults to \fBHEAD\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
-\fB\-\-gpg-sign\fR, \fB\-S\fR, \fB\-\-no\-gpg\-sign
-GPG-sign commits.  To override the \fIcommit.gpgSign\fR git configuration, use
-\fI\-\-no\-gpg\-sign\fR.
+.B \-S, \-\-gpg\-sign, \-\-no\-gpg\-sign
+GPG\-sign commits.  To override the \fBcommit.gpgSign\fP git configuration, use
+\fB\-\-no\-gpg\-sign\fP
 .UNINDENT
 .SS Main modes of operation
 .INDENT 0.0
@@ -156,10 +156,10 @@ not set, the value of \fBrebase.autoSquash\fP is used instead.
 .INDENT 0.0
 .TP
 .B revise.gpgSign
-If set to true, GPG-sign new commits; defaults to false.  This setting
-overrides the original git configuration \fBcommit.gpgSign\fR and may be
-overridden by the command line options \fI\-\-gpg\-sign\fR and
-\fI\-\-no\-gpg\-sign\fR.
+If set to true, GPG\-sign new commits; defaults to false.  This setting
+overrides the original git configuration \fBBcommit.gpgSign\fP and may be
+overridden by the command line options \fB\-\-gpg\-sign\fP and
+\fB\-\-no\-gpg\-sign\fP\&.
 .UNINDENT
 .SH CONFLICT RESOLUTION
 .sp
