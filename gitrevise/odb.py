@@ -305,7 +305,7 @@ class Repository:
         if self.sign_commits:
             try:
                 gpg = run(
-                    [self.gpg, "-bsau", self.key_id],
+                    [self.gpg, "--status-fd=2", "-bsau", self.key_id],
                     stdout=PIPE,
                     stderr=PIPE,
                     input=body + body_tail,
