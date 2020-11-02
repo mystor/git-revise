@@ -316,6 +316,8 @@ class Repository:
                 for line in gpg.stdout.splitlines():
                     body += b" " + line + b"\n"
 
+                if not b"\n[GNUPG:] SIG_CREATED " in gpg.stdout:
+                    raise CalledProcessError()
 
             except CalledProcessError as gpg:
                 print(gpg.stderr.decode(), file=sys.stderr, end="")
