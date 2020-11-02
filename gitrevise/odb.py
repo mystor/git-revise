@@ -311,8 +311,11 @@ class Repository:
                     input=body + body_tail,
                     check=True,
                 )
-                body += b"gpgsig " + gpg.stdout.replace(b"\n", b"\n ")
-                body = body[:-1]
+
+                body += b"gpgsig"
+                for line in gpg.stdout.splitlines():
+                    body += b" " + line + b"\n"
+
 
             except CalledProcessError as gpg:
                 print(gpg.stderr.decode(), file=sys.stderr, end="")
