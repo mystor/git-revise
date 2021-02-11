@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Jun 07, 2020" "0.6.0" "git-revise"
+.TH "GIT-REVISE" "1" "May 04, 2021" "0.6.0" "git-revise"
 .SH NAME
 git-revise \- Efficiently update, split, and rearrange git commits
 .
@@ -146,6 +146,14 @@ Configuration is managed by \fBgit\-config(1)\fP\&.
 If set to true, imply \fI\%\-\-autosquash\fP whenever \fI\%\-\-interactive\fP
 is specified. Overridden by \fI\%\-\-no\-autosquash\fP\&. Defaults to false. If
 not set, the value of \fBrebase.autoSquash\fP is used instead.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B revise.run\-hooks.commit\-msg
+If set to true the \fBcommit\-msg\fP hook will be run after exiting the
+editor. Defaults to false, because (unlike with \fBgit\-rebase(1)\fP)
+the worktree state might not reflect the commit state. If the hook takes
+the worktree state into account, it might behave differently.
 .UNINDENT
 .SH CONFLICT RESOLUTION
 .sp
