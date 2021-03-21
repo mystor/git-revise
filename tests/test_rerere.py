@@ -57,16 +57,19 @@ def test_reuse_recorded_resolution(repo):
 
 
 def test_rerere_merge(repo):
-    (repo.workdir / "file").write_bytes(10 * b"x\n")
+    the_file = repo.workdir / "file"
+    the_file.write_bytes(10 * b"x\n")
     bash(
         """
         git config rerere.enabled true
         git config rerere.autoUpdate true
         git add file; git commit -m 'initial commit'
-        sed 1coriginal1 -i file; git commit -am 'commit 1'
-        sed 1coriginal2 -i file; git commit -am 'commit 2'
         """
     )
+    the_file.write_bytes(b"original1\n" + 9 * b"x\n")
+    repo.git("commit", "-am", "commit1")
+    the_file.write_bytes(b"original2\n" + 9 * b"x\n")
+    repo.git("commit", "-am", "commit2")
 
     # Record a resolution for changing the order of two commits.
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
@@ -80,7 +83,10 @@ def test_rerere_merge(repo):
 
     # Introduce an unrelated change that will not conflict to check that we can
     # merge the file contents, and not just use the recorded postimage as is.
-    bash("sed '10c unrelated change, present in all commits' -i file; git add file")
+    the_file.write_bytes(
+        b"original2\n" + 8 * b"x\n" + b"unrelated change, present in all commits\n"
+    )
+    repo.git("add", "file")
     main(["HEAD~2"])
 
     with editor_main(("-i", "HEAD~~")) as ed:
