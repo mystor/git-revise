@@ -287,10 +287,8 @@ def replay_recorded_resolution(
     if not conflict_dir.is_dir():
         return (normalized_preimage, conflict_id, None)
     if not repo.bool_config("rerere.autoUpdate", default=False):
-        # TODO: if this option is disabled, Git applies recorded resolutions to
-        # files but doesn't stage them. We should ask the user whether to apply
-        # them. Don't record resolutions for now by returning no conflict ID.
-        return (b"", None, None)
+        if input("  Apply recorded resolution? (y/N) ").lower() != "y":
+            return (b"", None, None)
 
     postimage_path = conflict_dir / "postimage"
     preimage_path = conflict_dir / "preimage"
