@@ -1,5 +1,11 @@
 # Changelog
 
+## vNEXT
+
+* Add support for `git-rerere`, to record and replay conflict resolutions (#75)
+* Fix autosquash order of multiple fixup commits with the same target (#72)
+* Use `GIT_SEQUENCE_EDITOR` instead of `SEQUENCE_EDITOR` (#71)
+
 ## v0.6.0
 
 * Fixed handling of fixup-of-fixup commits (#58)
