@@ -348,3 +348,30 @@ def test_fixup_order_cycle(repo):
     new_todos = autosquash_todos(todos)
     assert len(new_todos) == 3
     assert all(step.kind == StepKind.PICK for step in new_todos)
+
+
+def test_autosquash_multiline_summary(repo):
+    bash(
+        """
+        git commit --allow-empty -m 'initial commit'
+        git commit --allow-empty -m 'multi
+        line
+        summary
+
+        body goes here
+        '
+
+        echo >file
+        git add file
+        git commit --fixup=HEAD
+        """
+    )
+
+    old = repo.get_commit("HEAD~")
+    assert old.persisted
+
+    main(["--autosquash"])
+
+    new = repo.get_commit("HEAD")
+    assert old != new, "commit was modified"
+    assert old.parents() == new.parents(), "parents are unchanged"

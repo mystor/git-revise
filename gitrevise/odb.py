@@ -515,8 +515,12 @@ class Commit(GitObj):
         return self.parents()[0]
 
     def summary(self) -> str:
-        """The summary line (first line) of the commit message"""
-        return self.message.split(b"\n", maxsplit=1)[0].decode(errors="replace")
+        """The summary line of the commit message. Returns the summary
+        as a single line, even if it spans multiple lines."""
+        summary_paragraph = self.message.split(b"\n\n", maxsplit=1)[0].decode(
+            errors="replace"
+        )
+        return " ".join(summary_paragraph.splitlines())
 
     def rebase(self, parent: "Commit") -> "Commit":
         """Create a new commit with the same changes, except with ``parent``

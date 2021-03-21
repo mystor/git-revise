@@ -1,5 +1,9 @@
 # Changelog
 
+## vNEXT
+
+* Fix handling of multiline commit subjects (#86)
+
 ## v0.6.0
 
 * Fixed handling of fixup-of-fixup commits (#58)
