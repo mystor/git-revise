@@ -1,8 +1,8 @@
 import re
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from .odb import Commit, Oid, Repository
+from .odb import Commit, Repository, MissingObject
 from .utils import run_editor, run_sequence_editor, edit_commit_message, cut_commit
 
 
@@ -104,48 +104,40 @@ def validate_todos(old: List[Step], new: List[Step]) -> None:
             raise ValueError("'index' actions follow all non-index todo items")
 
 
-def count_fixup_commits(fixups: Dict[Oid, List[Oid]], node: Oid) -> int:
-    return 1 + sum(
-        count_fixup_commits(fixups, commit) for commit in fixups.get(node, ())
-    )
+def add_autosquash_step(step: Step, picks: List[List[Step]]) -> None:
+    needle = summary = step.commit.summary()
+    while needle.startswith("fixup! ") or needle.startswith("squash! "):
+        needle = needle.split(maxsplit=1)[1]
+
+    if needle != summary:
+        if summary.startswith("fixup!"):
+            new_step = Step(StepKind.FIXUP, step.commit)
+        else:
+            assert summary.startswith("squash!")
+            new_step = Step(StepKind.SQUASH, step.commit)
+
+        for seq in picks:
+            if seq[0].commit.summary().startswith(needle):
+                seq.append(new_step)
+                return
+
+        try:
+            target = step.commit.repo.get_commit(needle)
+            for seq in picks:
+                if any(s.commit == target for s in seq):
+                    seq.append(new_step)
+                    return
+        except (ValueError, MissingObject):
+            pass
+
+    picks.append([step])
 
 
 def autosquash_todos(todos: List[Step]) -> List[Step]:
-    new_todos: List[Step] = []
-    fixups: Dict[Oid, List[Oid]] = {}
-
+    picks: List[List[Step]] = []
     for step in todos:
-        # Check if this is a fixup! or squash! commit, and ignore it otherwise.
-        summary = step.commit.summary()
-        if summary.startswith("fixup! "):
-            kind = StepKind.FIXUP
-        elif summary.startswith("squash! "):
-            kind = StepKind.SQUASH
-        else:
-            new_todos.append(step)
-            continue
-
-        # Locate a matching commit
-        found = None
-        needle = summary.split(maxsplit=1)[1]
-        for idx, target in enumerate(new_todos):
-            if target.commit.summary().startswith(
-                needle
-            ) or target.commit.oid.hex().startswith(needle):
-                found = idx
-                transitive_fixup_count = count_fixup_commits(fixups, target.commit.oid)
-                if target.commit.oid not in fixups:
-                    fixups[target.commit.oid] = []
-                fixups[target.commit.oid] += [step.commit.oid]
-                break
-
-        if found is None:
-            new_todos.append(step)
-        else:
-            # Insert a new `fixup` or `squash` step in the correct place.
-            new_todos.insert(found + transitive_fixup_count, Step(kind, step.commit))
-
-    return new_todos
+        add_autosquash_step(step, picks)
+    return [s for p in picks for s in p]
 
 
 def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
