@@ -6,11 +6,11 @@ from conftest import *
 from gitrevise.merge import normalize_conflicted_file
 
 
-def history_with_two_conflicting_commits():
+def history_with_two_conflicting_commits(autoUpdate: bool = False):
     bash(
-        """
+        f"""
         git config rerere.enabled true
-        git config rerere.autoUpdate true
+        git config rerere.autoUpdate {"true" if autoUpdate else "false"}
         echo > file; git add file; git commit -m 'initial commit'
         echo one > file; git commit -am 'commit one'
         echo two > file; git commit -am 'commit two'
@@ -19,7 +19,7 @@ def history_with_two_conflicting_commits():
 
 
 def test_reuse_recorded_resolution(repo):
-    history_with_two_conflicting_commits()
+    history_with_two_conflicting_commits(autoUpdate=True)
 
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
         flip_last_two_commits(repo, ed)
@@ -56,6 +56,46 @@ def test_reuse_recorded_resolution(repo):
             f.replace_dedent("resolved one\n")
 
 
+def test_rerere_no_autoupdate(repo):
+    history_with_two_conflicting_commits(autoUpdate=False)
+
+    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
+        flip_last_two_commits(repo, ed)
+        with ed.next_file() as f:
+            f.replace_dedent("resolved two\n")
+        with ed.next_file() as f:
+            f.replace_dedent("resolved one\n")
+
+    tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
+    bash("git reset --hard HEAD@{1}")
+
+    # Use the recorded resolution by confirming both times.
+    with editor_main(("-i", "HEAD~~"), input=b"y\ny\n") as ed:
+        flip_last_two_commits(repo, ed)
+    assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
+    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
+    assert leftover_index == dedent(
+        """\
+        @@ -1 +1 @@
+        -resolved one
+        +two"""
+    )
+    bash("git reset --hard HEAD@{1}")
+
+    # Do not use the recorded resolution for the second commit.
+    with editor_main(("-i", "HEAD~~"), input=b"y\nn\ny\ny\n") as ed:
+        flip_last_two_commits(repo, ed)
+        with ed.next_file() as f:
+            f.replace_dedent("resolved differently\n")
+    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
+    assert leftover_index == dedent(
+        """\
+        @@ -1 +1 @@
+        -resolved differently
+        +two"""
+    )
+
+
 def test_rerere_merge(repo):
     (repo.workdir / "file").write_bytes(10 * b"x\n")
     bash(
@@ -63,10 +103,12 @@ def test_rerere_merge(repo):
         git config rerere.enabled true
         git config rerere.autoUpdate true
         git add file; git commit -m 'initial commit'
-        sed 1coriginal1 -i file; git commit -am 'commit 1'
-        sed 1coriginal2 -i file; git commit -am 'commit 2'
         """
     )
+    changeline("file", 0, b"original1\n")
+    bash("git commit -am 'commit 1'")
+    changeline("file", 0, b"original2\n")
+    bash("git commit -am 'commit 2'")
 
     # Record a resolution for changing the order of two commits.
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
@@ -80,7 +122,8 @@ def test_rerere_merge(repo):
 
     # Introduce an unrelated change that will not conflict to check that we can
     # merge the file contents, and not just use the recorded postimage as is.
-    bash("sed '10c unrelated change, present in all commits' -i file; git add file")
+    changeline("file", 9, b"unrelated change, present in all commits\n")
+    bash("git add file")
     main(["HEAD~2"])
 
     with editor_main(("-i", "HEAD~~")) as ed:
@@ -108,7 +151,7 @@ def test_rerere_merge(repo):
 
 
 def test_replay_resolution_recorded_by_git(repo):
-    history_with_two_conflicting_commits()
+    history_with_two_conflicting_commits(autoUpdate=True)
     # Switch the order of the last two commits, recording the conflict
     # resolution with Git itself.
     bash(

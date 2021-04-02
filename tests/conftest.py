@@ -112,6 +112,14 @@ def bash(command):
     subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=True, env=env)
 
 
+def changeline(path, lineno, newline):
+    with open(path, "rb") as f:
+        lines = f.readlines()
+    lines[lineno] = newline
+    with open(path, "wb") as f:
+        f.write(b"".join(lines))
+
+
 # Run the main entry point for git-revise in a subprocess.
 def main(args, **kwargs):
     kwargs.setdefault("check", True)
