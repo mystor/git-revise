@@ -63,8 +63,8 @@ def test_rerere_merge(repo):
         git config rerere.enabled true
         git config rerere.autoUpdate true
         git add file; git commit -m 'initial commit'
-        sed 1coriginal1 -i file; git commit -am 'commit 1'
-        sed 1coriginal2 -i file; git commit -am 'commit 2'
+        sed '1c\\\noriginal1' -i file; git commit -am 'commit 1'
+        sed '1c\\\noriginal2' -i file; git commit -am 'commit 2'
         """
     )
 
@@ -80,7 +80,7 @@ def test_rerere_merge(repo):
 
     # Introduce an unrelated change that will not conflict to check that we can
     # merge the file contents, and not just use the recorded postimage as is.
-    bash("sed '10c unrelated change, present in all commits' -i file; git add file")
+    bash("sed '10c\\\nunrelated change, present in all commits' -i file; git add file")
     main(["HEAD~2"])
 
     with editor_main(("-i", "HEAD~~")) as ed:
