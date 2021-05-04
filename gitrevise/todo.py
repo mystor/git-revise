@@ -48,7 +48,7 @@ class Step:
 
     @staticmethod
     def parse(repo: Repository, instr: str) -> "Step":
-        parsed = re.match(r"(?P<command>\S+)\s(?P<hash>\S+)", instr)
+        parsed = re.match(r"(?P<command>\S+)\s+(?P<hash>\S+)", instr)
         if not parsed:
             raise ValueError(
                 f"todo entry '{instr}' must follow format <keyword> <sha> <optional message>"
