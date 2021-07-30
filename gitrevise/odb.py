@@ -162,7 +162,8 @@ class Repository:
 
         self.index = Index(self)
 
-        self._catfile = Popen(
+        # Pylint 2.8 emits a false positive; fixed in 2.9.
+        self._catfile = Popen(  # pylint: disable=consider-using-with
             ["git", "cat-file", "--batch"],
             bufsize=-1,
             stdin=PIPE,
@@ -242,7 +243,10 @@ class Repository:
     def get_tempdir(self) -> Path:
         """Return a temporary directory to use for modifications to this repository"""
         if self._tempdir is None:
-            self._tempdir = TemporaryDirectory(prefix="revise.", dir=str(self.gitdir))
+            # Pylint 2.8 emits a false positive; fixed in 2.9.
+            self._tempdir = TemporaryDirectory(  # pylint: disable=consider-using-with
+                prefix="revise.", dir=str(self.gitdir)
+            )
         return Path(self._tempdir.name)
 
     def git_path(self, path: Union[str, Path]) -> Path:
