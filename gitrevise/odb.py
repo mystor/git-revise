@@ -217,10 +217,10 @@ class Repository:
         self,
         *cmd: str,
         cwd: Optional[Path] = None,
-        stdin: Optional[bytes] = None,
-        trim_newline: bool = True,
         env: Dict[str, str] = None,
+        stdin: Optional[bytes] = None,
         nocapture: bool = False,
+        trim_newline: bool = True,
     ) -> bytes:
         if cwd is None:
             cwd = getattr(self, "workdir", None)
@@ -228,10 +228,10 @@ class Repository:
         cmd = ("git",) + cmd
         prog = run(
             cmd,
-            stdout=None if nocapture else PIPE,
             cwd=cwd,
             env=env,
             input=stdin,
+            stdout=None if nocapture else PIPE,
             check=True,
         )
 
@@ -814,10 +814,10 @@ class Index:
         self,
         *cmd: str,
         cwd: Optional[Path] = None,
-        stdin: Optional[bytes] = None,
-        trim_newline: bool = True,
         env: Optional[Mapping[str, str]] = None,
+        stdin: Optional[bytes] = None,
         nocapture: bool = False,
+        trim_newline: bool = True,
     ) -> bytes:
         """Invoke git with the given index as active"""
         env = dict(**env) if env is not None else dict(**os.environ)
@@ -825,10 +825,10 @@ class Index:
         return self.repo.git(
             *cmd,
             cwd=cwd,
-            stdin=stdin,
-            trim_newline=trim_newline,
             env=env,
+            stdin=stdin,
             nocapture=nocapture,
+            trim_newline=trim_newline,
         )
 
     def tree(self) -> Tree:
