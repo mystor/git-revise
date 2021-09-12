@@ -10,7 +10,9 @@ import os
 from typing import (
     TypeVar,
     Type,
+    Any,
     Dict,
+    IO,
     Union,
     Sequence,
     Optional,
@@ -43,6 +45,7 @@ class GPGSignError(Exception):
 
 
 T = TypeVar("T")  # pylint: disable=invalid-name
+_FILE = Union[None, int, IO[Any]]
 
 
 class Oid(bytes):
@@ -219,7 +222,7 @@ class Repository:
         cwd: Optional[Path] = None,
         env: Dict[str, str] = None,
         stdin: Optional[bytes] = None,
-        nocapture: bool = False,
+        stdout: _FILE = PIPE,
         trim_newline: bool = True,
     ) -> bytes:
         if cwd is None:
@@ -231,14 +234,13 @@ class Repository:
             cwd=cwd,
             env=env,
             input=stdin,
-            stdout=None if nocapture else PIPE,
+            stdout=stdout,
             check=True,
         )
 
-        if nocapture:
-            return b""
-        if trim_newline and prog.stdout.endswith(b"\n"):
-            return prog.stdout[:-1]
+        if trim_newline and isinstance(prog.stdout, bytes):
+            if prog.stdout.endswith(b"\n"):
+                return prog.stdout[:-1]
         return prog.stdout
 
     def config(self, setting: str, default: T) -> Union[bytes, T]:
@@ -816,7 +818,7 @@ class Index:
         cwd: Optional[Path] = None,
         env: Optional[Mapping[str, str]] = None,
         stdin: Optional[bytes] = None,
-        nocapture: bool = False,
+        stdout: _FILE = PIPE,
         trim_newline: bool = True,
     ) -> bytes:
         """Invoke git with the given index as active"""
@@ -827,7 +829,7 @@ class Index:
             cwd=cwd,
             env=env,
             stdin=stdin,
-            nocapture=nocapture,
+            stdout=stdout,
             trim_newline=trim_newline,
         )
 

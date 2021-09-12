@@ -275,7 +275,7 @@ def cut_commit(commit: Commit) -> Commit:
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into the first part.
-    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", nocapture=True)
+    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", stdout=None)
 
     # Write out the newly created tree.
     mid_tree = index.tree()
