@@ -208,11 +208,11 @@ def merge_blobs(
     )
     (is_clean_merge, merged) = merge_files(
         repo,
+        tmpdir,
         annotated_labels,
         current.body,
         base.body if base else b"",
         other.body,
-        tmpdir,
     )
 
     if is_clean_merge:
@@ -259,11 +259,11 @@ def merge_blobs(
 
 def merge_files(
     repo: Repository,
+    tmpdir: Path,
     labels: Tuple[str, str, str],
     current: bytes,
     base: bytes,
     other: bytes,
-    tmpdir: Path,
 ) -> Tuple[bool, bytes]:
     (tmpdir / "current").write_bytes(current)
     (tmpdir / "base").write_bytes(base)
@@ -325,11 +325,11 @@ def replay_recorded_resolution(
 
     (is_clean_merge, merged) = merge_files(
         repo,
+        tmpdir=tmpdir,
         labels=("recorded postimage", "recorded preimage", "new preimage"),
         current=recorded_postimage,
         base=recorded_preimage,
         other=normalized_preimage,
-        tmpdir=tmpdir,
     )
     if not is_clean_merge:
         # We could ask the user to merge this. However, that could be confusing.
