@@ -56,7 +56,7 @@ def conflict_prompt(
 ) -> T:
     print(f"{descr} conflict for '{path}'")
     print(f"  (1) {labels[0]}: {current_descr}")
-    print(f"  (2) {labels[1]}: {other_descr}")
+    print(f"  (2) {labels[2]}: {other_descr}")
     char = input("Resolution or (A)bort? ")
     if char == "1":
         return current
