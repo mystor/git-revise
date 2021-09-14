@@ -29,6 +29,12 @@ T = TypeVar("T")  # pylint: disable=invalid-name
 DEFAULT_CONFLICT_MARKER_SIZE = 7
 
 
+def get_conflict_marker_size(__repo: Repository, __file: Path) -> int:
+    # TODO: Determine on a per-file basis by its `conflict-marker-size` attribute.
+    # See ll_merge_marker_size in git/ll-merge.c
+    return DEFAULT_CONFLICT_MARKER_SIZE
+
+
 class MergeConflict(Exception):
     pass
 
@@ -206,7 +212,7 @@ def merge_blobs(
 
     tmpdir = repo.get_tempdir()
 
-    marker_size = DEFAULT_CONFLICT_MARKER_SIZE
+    marker_size = get_conflict_marker_size(repo, path)
 
     annotated_labels = (
         f"{path} (new parent): {labels[0]}",
