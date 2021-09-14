@@ -273,8 +273,10 @@ def merge_files(
     try:
         merged = repo.git(
             "merge-file",
-            "-q",
-            "-p",
+            # Do not print warnings on conflicts.
+            "--quiet",
+            # Send results to stdout instead of overwriting "current file".
+            "--stdout",
             f"-L{labels[0]}",
             f"-L{labels[1]}",
             f"-L{labels[2]}",
