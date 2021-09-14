@@ -245,7 +245,7 @@ def merge_blobs(
     if merged == preimage:
         print("(note) conflicted file is unchanged")
 
-    if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
+    if any(marker in merged for marker in (b"<<<<<<<", b"=======", b">>>>>>>")):
         print("(note) conflict markers found in the merged file")
 
     # Was the merge successful?
