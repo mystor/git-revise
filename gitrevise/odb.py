@@ -506,6 +506,18 @@ class Commit(GitObj):
         """``tree`` object corresponding to this commit"""
         return self.repo.get_tree(self.tree_oid)
 
+    def parent_tree(self) -> "Tree":
+        """``tree`` object corresponding to the first parent of this commit,
+        or the null tree if this is a root commit"""
+        if self.is_root:
+            return Tree(self.repo, b"")
+        return self.parents()[0].tree()
+
+    @property
+    def is_root(self) -> bool:
+        """Whether this commit has no parents"""
+        return not self.parent_oids
+
     def parents(self) -> Sequence["Commit"]:
         """List of parent commits"""
         return [self.repo.get_commit(parent) for parent in self.parent_oids]
