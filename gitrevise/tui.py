@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, List
 from argparse import ArgumentParser, Namespace
-from subprocess import CalledProcessError
+from subprocess import DEVNULL, CalledProcessError
 import sys
 
 from .odb import Repository, Commit, Reference
@@ -228,9 +228,9 @@ def noninteractive(
 def inner_main(args: Namespace, repo: Repository) -> None:
     # If '-a' or '-p' was specified, stage changes.
     if args.all:
-        repo.git("add", "-u")
+        repo.git("add", "-u", stdout=DEVNULL)
     if args.patch:
-        repo.git("add", "-p")
+        repo.git("add", "-p", stdout=DEVNULL)
 
     if args.gpg_sign:
         repo.sign_commits = True

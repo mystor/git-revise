@@ -25,7 +25,7 @@ import sys
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
-from subprocess import Popen, run, PIPE, CalledProcessError
+from subprocess import DEVNULL, Popen, run, PIPE, CalledProcessError
 from collections import defaultdict
 from tempfile import TemporaryDirectory
 
@@ -771,13 +771,24 @@ class Tree(GitObj):
         entry in the index will have its "Skip Workdir" bit set."""
 
         index = Index(self.repo, path)
-        self.repo.git("read-tree", "--index-output=" + str(path), self.persist().hex())
+        self.repo.git(
+            "read-tree",
+            "--index-output=" + str(path),
+            self.persist().hex(),
+            stdout=DEVNULL,
+        )
 
         # If skip_worktree is set, mark every file as --skip-worktree.
         if skip_worktree:
             # XXX(nika): Could be done with a pipe, which might improve perf.
             files = index.git("ls-files")
-            index.git("update-index", "--skip-worktree", "--stdin", stdin=files)
+            index.git(
+                "update-index",
+                "--skip-worktree",
+                "--stdin",
+                stdin=files,
+                stdout=DEVNULL,
+            )
 
         return index
 
@@ -898,5 +909,5 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
         if self.target is not None:
             args.append(str(self.target.oid))
 
-        self.repo.git(*args)
+        self.repo.git(*args, stdout=DEVNULL)
         self.target = new
