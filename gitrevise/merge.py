@@ -119,7 +119,15 @@ def merge_entries(
         elif base and base.mode == other.mode:
             mode = current.mode
         else:
-            mode = Mode.EXEC  # XXX: gross
+            mode = conflict_prompt(
+                path,
+                "File mode",
+                labels,
+                current.mode,
+                str(current.mode),
+                other.mode,
+                str(other.mode),
+            )
     else:
         return conflict_prompt(
             path,
