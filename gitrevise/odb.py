@@ -328,7 +328,6 @@ class Repository:
         key_id = self.config(
             "user.signingKey", default=self.default_committer.signing_key
         )
-        gpg = None
         try:
             gpg = sh_run(
                 (self.gpg, "--status-fd=2", "-bsau", key_id),
@@ -337,8 +336,8 @@ class Repository:
                 input=buffer,
                 check=True,
             )
-        except CalledProcessError as gpg:
-            print(gpg.stderr.decode(), file=sys.stderr, end="")
+        except CalledProcessError as exc:
+            print(exc.stderr.decode(), file=sys.stderr, end="")
             print("gpg failed to sign commit", file=sys.stderr)
             raise
 
