@@ -313,7 +313,8 @@ class Repository:
         body += b"committer " + committer.replace(b"\n", b"\n ") + b"\n"
 
         body_tail = b"\n" + message
-        body += self.sign_buffer(body + body_tail)
+        if self.sign_commits:
+            body += self.sign_buffer(body + body_tail)
         body += body_tail
 
         return Commit(self, body)
@@ -321,9 +322,6 @@ class Repository:
     def sign_buffer(self, buffer: bytes) -> bytes:
         """Return the text of the signed commit object."""
         from .utils import sh_run  # pylint: disable=import-outside-toplevel
-
-        if not self.sign_commits:
-            return b""
 
         key_id = self.config(
             "user.signingKey", default=self.default_committer.signing_key
