@@ -45,7 +45,7 @@ def rebase(commit: Commit, new_parent: Optional[Commit]) -> Commit:
         return cmt.tree() if cmt is not None else Tree(repo, b"")
 
     tree = merge_trees(
-        Path("/"),
+        Path(),
         (get_summary(new_parent), get_summary(orig_parent), get_summary(commit)),
         get_tree(new_parent),
         get_tree(orig_parent),
@@ -237,7 +237,7 @@ def merge_blobs(
 
     # Open the editor on the conflicted file. We ensure the relative path
     # matches the path of the original file for a better editor experience.
-    conflicts = tmpdir / "conflict" / path.relative_to("/")
+    conflicts = tmpdir / "conflict" / path
     conflicts.parent.mkdir(parents=True, exist_ok=True)
     conflicts.write_bytes(preimage)
     merged = edit_file(repo, conflicts)
