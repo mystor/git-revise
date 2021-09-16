@@ -342,10 +342,9 @@ class Repository:
         if b"\n[GNUPG:] SIG_CREATED " not in gpg.stderr:
             raise GPGSignError(gpg.stderr.decode())
 
-        signature = b"gpgsig"
-        for line in gpg.stdout.splitlines():
-            signature += b" " + line + b"\n"
-        return signature
+        # Strip CR from the line endings, in case we are on Windows.
+        gpgsig: bytes = gpg.stdout.replace(b"\r", b"")
+        return b"gpgsig " + gpgsig.replace(b"\n", b"\n ") + b"\n"
 
     def new_tree(self, entries: Mapping[bytes, Entry]) -> Tree:
         """Directly create an in-memory tree object, without persisting it.
