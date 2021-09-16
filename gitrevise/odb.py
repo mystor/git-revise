@@ -314,13 +314,13 @@ class Repository:
 
         body_tail = b"\n" + message
         if self.sign_commits:
-            gpgsig = self.sign_buffer(body + body_tail)
+            gpgsig = self.get_gpgsig(body + body_tail)
             body += b"gpgsig " + gpgsig.replace(b"\n", b"\n ") + b"\n"
         body += body_tail
 
         return Commit(self, body)
 
-    def sign_buffer(self, buffer: bytes) -> bytes:
+    def get_gpgsig(self, buffer: bytes) -> bytes:
         """Return the text of the signed commit object."""
         from .utils import sh_run  # pylint: disable=import-outside-toplevel
 
@@ -328,6 +328,7 @@ class Repository:
             "user.signingKey", default=self.default_committer.signing_key
         )
         try:
+            # See git/gpg-interface.c:sign_buffer for reference
             gpg = sh_run(
                 (self.gpg, "--status-fd=2", "-bsau", key_id),
                 stdout=PIPE,
