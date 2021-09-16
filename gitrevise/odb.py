@@ -309,8 +309,8 @@ class Repository:
         body = b"tree " + tree.oid.hex().encode() + b"\n"
         for parent in parents:
             body += b"parent " + parent.oid.hex().encode() + b"\n"
-        body += b"author " + author + b"\n"
-        body += b"committer " + committer + b"\n"
+        body += b"author " + author.replace(b"\n", b"\n ") + b"\n"
+        body += b"committer " + committer.replace(b"\n", b"\n ") + b"\n"
 
         body_tail = b"\n" + message
         body += self.sign_buffer(body + body_tail)
