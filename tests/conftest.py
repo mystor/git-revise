@@ -1,15 +1,12 @@
 # pylint: skip-file
 
 import pytest
-import shutil
 import shlex
 import os
 import sys
 import textwrap
 import subprocess
 import traceback
-import time
-from pathlib import Path
 from gitrevise.odb import Repository
 from contextlib import contextmanager
 from threading import Thread, Event

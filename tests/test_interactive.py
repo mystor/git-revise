@@ -1,6 +1,5 @@
 # pylint: skip-file
 
-import textwrap
 import pytest
 from conftest import *
 
