@@ -314,7 +314,8 @@ class Repository:
 
         body_tail = b"\n" + message
         if self.sign_commits:
-            body += self.sign_buffer(body + body_tail)
+            gpgsig = self.sign_buffer(body + body_tail)
+            body += b"gpgsig " + gpgsig.replace(b"\n", b"\n ") + b"\n"
         body += body_tail
 
         return Commit(self, body)
@@ -343,8 +344,8 @@ class Repository:
             raise GPGSignError(gpg.stderr.decode())
 
         # Strip CR from the line endings, in case we are on Windows.
-        gpgsig: bytes = gpg.stdout.replace(b"\r", b"")
-        return b"gpgsig " + gpgsig.replace(b"\n", b"\n ") + b"\n"
+        gpg_out: bytes = gpg.stdout
+        return gpg_out.replace(b"\r", b"")
 
     def new_tree(self, entries: Mapping[bytes, Entry]) -> Tree:
         """Directly create an in-memory tree object, without persisting it.
