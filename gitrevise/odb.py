@@ -759,9 +759,8 @@ class Tree(GitObj):
         while rest:
             mode, rest = rest.split(b" ", maxsplit=1)
             name, rest = rest.split(b"\0", maxsplit=1)
-            entry_oid = Oid(rest[:20])
-            rest = rest[20:]
-            self.entries[name] = Entry(self.repo, Mode(mode), entry_oid)
+            eoid, rest = rest[:20], rest[20:]
+            self.entries[name] = Entry(self.repo, Mode(mode), Oid(eoid))
 
     def _persist_deps(self) -> None:
         for entry in self.entries.values():
