@@ -565,7 +565,7 @@ class Commit(GitObj):
         for hdr in re.split(rb"\n(?! )", hdrs):
             # Parse out the key-value pairs from the header, handling
             # continuation lines.
-            key, value = hdr.split(maxsplit=1)
+            key, value = hdr.split(b" ", maxsplit=1)
             value = value.replace(b"\n ", b"\n")
 
             self.gpgsig = None
