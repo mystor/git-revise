@@ -236,7 +236,7 @@ def test_normalize_conflicted_file() -> None:
             c
             ==========
             d
-            >>>>>>>>>> longer conflict marker, to be trimmed
+            >>>>>>>>>> longer conflict marker, to be ignored
             """
         )
     ) == (
@@ -250,14 +250,14 @@ def test_normalize_conflicted_file() -> None:
 
             unrelated line
 
-            <<<<<<<
+            <<<<<<<<<< HEAD
             c
-            =======
+            ==========
             d
-            >>>>>>>
+            >>>>>>>>>> longer conflict marker, to be ignored
             """
         ),
-        "3d7cdc2948951408412cc64f3816558407f77e18",
+        "0630df854874fc5ffb92a197732cce0d8928e898",
     )
 
     # Discard original-text-marker from merge.conflictStyle diff3.
@@ -315,18 +315,18 @@ def test_normalize_conflicted_file() -> None:
         normalize_conflicted_file(
             dedent(
                 """\
-            <<<<<<<
+            <<<<<<< ours (outer)
             outer left
-            <<<<<<<<<<<
+            <<<<<<< ours (inner)
             inner left
-            |||||||||||
+            |||||||
             inner diff3 original section
-            ===========
+            =======
             inner right
-            >>>>>>>>>>>
+            >>>>>>> theirs (inner)
             =======
             outer right
-            >>>>>>>
+            >>>>>>> theirs (outer)
             """
             )
         )[0]
