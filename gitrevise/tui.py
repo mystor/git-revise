@@ -23,7 +23,17 @@ def build_parser() -> ArgumentParser:
         Rebase staged changes onto the given commit, and rewrite history to
         incorporate these changes."""
     )
-    parser.add_argument("target", nargs="?", help="target commit to apply fixups to")
+    target_group = parser.add_mutually_exclusive_group()
+    target_group.add_argument(
+        "--root",
+        action="store_true",
+        help="revise starting at the root commit",
+    )
+    target_group.add_argument(
+        "target",
+        nargs="?",
+        help="target commit to apply fixups to",
+    )
     parser.add_argument("--ref", default="HEAD", help="reference to update")
     parser.add_argument(
         "--reauthor",
@@ -96,11 +106,11 @@ def interactive(
 ) -> None:
     assert head.target is not None
 
-    if args.target is None:
-        base, to_rebase = local_commits(repo, head.target)
-    else:
-        base = repo.get_commit(args.target)
+    if args.target or args.root:
+        base = repo.get_commit(args.target) if args.target else None
         to_rebase = commit_range(base, head.target)
+    else:
+        base, to_rebase = local_commits(repo, head.target)
 
     # Build up an initial todos list, edit that todos list.
     todos = original = build_todos(to_rebase, staged)
@@ -137,6 +147,9 @@ def noninteractive(
     args: Namespace, repo: Repository, staged: Optional[Commit], head: Reference[Commit]
 ) -> None:
     assert head.target is not None
+
+    if args.root:
+        raise ValueError("Incompatible option: --root requires --interactive")
 
     if args.target is None:
         raise ValueError("<target> is a required argument")

@@ -170,6 +170,13 @@ This mode is started with the last commit you want to retain "as-is":
 
     git revise -i <after-this-commit>
 
+The special target `--root` is available to revise everything up to the root
+commit:
+
+.. code-block:: bash
+
+    git revise -i --root
+
 An editor will be fired up with the commits in your current branch after the
 given commit. If the index has any staged but uncommitted changes, a ``<git
 index>`` entry will also be present.
