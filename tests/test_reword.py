@@ -6,7 +6,7 @@ from conftest import *
 
 @pytest.mark.parametrize("target", ["HEAD", "HEAD~", "HEAD~~"])
 @pytest.mark.parametrize("use_editor", [True, False])
-def test_reword(repo, target, use_editor):
+def test_reword(repo: Repository, target: str, use_editor: bool) -> None:
     bash(
         """
         echo "hello, world" > file1

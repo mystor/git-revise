@@ -6,7 +6,7 @@ from conftest import *
 from gitrevise.merge import normalize_conflicted_file
 
 
-def history_with_two_conflicting_commits(autoUpdate: bool = False):
+def history_with_two_conflicting_commits(autoUpdate: bool = False) -> None:
     bash(
         f"""
         git config rerere.enabled true
@@ -18,7 +18,7 @@ def history_with_two_conflicting_commits(autoUpdate: bool = False):
     )
 
 
-def test_reuse_recorded_resolution(repo):
+def test_reuse_recorded_resolution(repo: Repository) -> None:
     history_with_two_conflicting_commits(autoUpdate=True)
 
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
@@ -56,7 +56,7 @@ def test_reuse_recorded_resolution(repo):
             f.replace_dedent("resolved one\n")
 
 
-def test_rerere_no_autoupdate(repo):
+def test_rerere_no_autoupdate(repo: Repository) -> None:
     history_with_two_conflicting_commits(autoUpdate=False)
 
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
@@ -96,7 +96,7 @@ def test_rerere_no_autoupdate(repo):
     )
 
 
-def test_rerere_merge(repo):
+def test_rerere_merge(repo: Repository) -> None:
     (repo.workdir / "file").write_bytes(10 * b"x\n")
     bash(
         """
@@ -150,7 +150,7 @@ def test_rerere_merge(repo):
     )
 
 
-def test_replay_resolution_recorded_by_git(repo):
+def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
     history_with_two_conflicting_commits(autoUpdate=True)
     # Switch the order of the last two commits, recording the conflict
     # resolution with Git itself.
@@ -218,7 +218,7 @@ def test_replay_resolution_recorded_by_git(repo):
     )
 
 
-def test_normalize_conflicted_file():
+def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
     assert normalize_conflicted_file(
         dedent(
@@ -346,9 +346,10 @@ def test_normalize_conflicted_file():
     )
 
 
-def flip_last_two_commits(repo: Repository, ed: Editor):
+def flip_last_two_commits(repo: Repository, ed: Editor) -> None:
     head = repo.get_commit("HEAD")
     with ed.next_file() as f:
+        assert f.indata
         lines = f.indata.splitlines()
         assert lines[0].startswith(b"pick " + head.parent().oid.short().encode())
         assert lines[1].startswith(b"pick " + head.oid.short().encode())

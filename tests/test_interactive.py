@@ -4,7 +4,7 @@ import pytest
 from conftest import *
 
 
-def interactive_reorder_helper(repo, cwd):
+def interactive_reorder_helper(repo: Repository, cwd: "StrPath") -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -58,16 +58,16 @@ def interactive_reorder_helper(repo, cwd):
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
 
 
-def test_interactive_reorder(repo):
+def test_interactive_reorder(repo: Repository) -> None:
     interactive_reorder_helper(repo, cwd=repo.workdir)
 
 
-def test_interactive_reorder_subdir(repo):
+def test_interactive_reorder_subdir(repo: Repository) -> None:
     bash("mkdir subdir")
     interactive_reorder_helper(repo, cwd=repo.workdir / "subdir")
 
 
-def test_interactive_on_root(repo):
+def test_interactive_on_root(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -126,7 +126,7 @@ def test_interactive_on_root(repo):
     assert new_commit3.tree() == orig_commit3.tree()
 
 
-def test_interactive_fixup(repo):
+def test_interactive_fixup(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -210,7 +210,12 @@ def test_interactive_fixup(repo):
         (None, "1", True),
     ],
 )
-def test_autosquash_config(repo, rebase_config, revise_config, expected):
+def test_autosquash_config(
+    repo: Repository,
+    rebase_config: Optional[str],
+    revise_config: Optional[str],
+    expected: bool,
+) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -253,8 +258,8 @@ def test_autosquash_config(repo, rebase_config, revise_config, expected):
 
         """
 
-    def subtest(args, expected_todos):
-        with editor_main(args + ["-i", "HEAD~3"]) as ed:
+    def subtest(args: Sequence[str], expected_todos: str) -> None:
+        with editor_main((*args, "-i", "HEAD~3")) as ed:
             with ed.next_file() as f:
                 assert f.startswith_dedent(expected_todos)
                 f.replace_dedent(disabled)  # don't mutate state
@@ -266,7 +271,7 @@ def test_autosquash_config(repo, rebase_config, revise_config, expected):
     subtest(["--no-autosquash"], disabled)
 
 
-def test_interactive_reword(repo):
+def test_interactive_reword(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1

@@ -7,7 +7,7 @@ import os
 
 
 @pytest.fixture
-def basic_repo(repo):
+def basic_repo(repo: Repository) -> Repository:
     bash(
         """
         cat <<EOF >file1
@@ -29,13 +29,23 @@ def basic_repo(repo):
     return repo
 
 
-def fixup_helper(repo, flags, target, message=None):
+def fixup_helper(
+    repo: Repository,
+    flags: Sequence[str],
+    target: str,
+    message: Optional[str] = None,
+) -> None:
     with fixup_helper_editor(repo=repo, flags=flags, target=target, message=message):
         pass
 
 
 @contextmanager
-def fixup_helper_editor(repo, flags, target, message=None):
+def fixup_helper_editor(
+    repo: Repository,
+    flags: Sequence[str],
+    target: str,
+    message: Optional[str] = None,
+) -> Generator[Editor, None, None]:
     old = repo.get_commit(target)
     assert old.persisted
 
@@ -46,7 +56,7 @@ def fixup_helper_editor(repo, flags, target, message=None):
         """
     )
 
-    with editor_main(flags + [target]) as ed:
+    with editor_main((*flags, target)) as ed:
         yield ed
 
     new = repo.get_commit(target)
@@ -65,15 +75,15 @@ def fixup_helper_editor(repo, flags, target, message=None):
     assert new.committer == repo.default_committer, "committer is updated"
 
 
-def test_fixup_head(basic_repo):
+def test_fixup_head(basic_repo: Repository) -> None:
     fixup_helper(basic_repo, [], "HEAD")
 
 
-def test_fixup_nonhead(basic_repo):
+def test_fixup_nonhead(basic_repo: Repository) -> None:
     fixup_helper(basic_repo, [], "HEAD~")
 
 
-def test_fixup_head_msg(basic_repo):
+def test_fixup_head_msg(basic_repo: Repository) -> None:
     fixup_helper(
         basic_repo,
         ["-m", "fixup_head test", "-m", "another line"],
@@ -82,7 +92,7 @@ def test_fixup_head_msg(basic_repo):
     )
 
 
-def test_fixup_nonhead_msg(basic_repo):
+def test_fixup_nonhead_msg(basic_repo: Repository) -> None:
     fixup_helper(
         basic_repo,
         ["-m", "fixup_nonhead test", "-m", "another line"],
@@ -91,7 +101,7 @@ def test_fixup_nonhead_msg(basic_repo):
     )
 
 
-def test_fixup_head_editor(basic_repo):
+def test_fixup_head_editor(basic_repo: Repository) -> None:
     old = basic_repo.get_commit("HEAD")
     newmsg = "fixup_head_editor test\n\nanother line\n"
 
@@ -101,7 +111,7 @@ def test_fixup_head_editor(basic_repo):
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_editor(basic_repo):
+def test_fixup_nonhead_editor(basic_repo: Repository) -> None:
     old = basic_repo.get_commit("HEAD~")
     newmsg = "fixup_nonhead_editor test\n\nanother line\n"
 
@@ -111,7 +121,7 @@ def test_fixup_nonhead_editor(basic_repo):
             f.replace_dedent(newmsg)
 
 
-def test_fixup_nonhead_conflict(basic_repo):
+def test_fixup_nonhead_conflict(basic_repo: Repository) -> None:
     bash('echo "conflict" > file1')
     bash("git add file1")
 
@@ -151,7 +161,7 @@ def test_fixup_nonhead_conflict(basic_repo):
     assert new != old
 
 
-def test_autosquash_nonhead(repo):
+def test_autosquash_nonhead(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -195,7 +205,7 @@ def test_autosquash_nonhead(repo):
     assert file2 == b"second file\nextra line\n"
 
 
-def test_fixup_of_fixup(repo):
+def test_fixup_of_fixup(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -243,7 +253,7 @@ def test_fixup_of_fixup(repo):
     assert file2 == b"second file\nextra line\neven more\n"
 
 
-def test_fixup_by_id(repo):
+def test_fixup_by_id(repo: Repository) -> None:
     bash(
         """
         echo "hello, world" > file1
@@ -287,7 +297,7 @@ def test_fixup_by_id(repo):
     assert file2 == b"second file\nextra line\n"
 
 
-def test_fixup_order(repo):
+def test_fixup_order(repo: Repository) -> None:
     bash(
         """
         git commit --allow-empty -m 'old'
@@ -310,7 +320,7 @@ def test_fixup_order(repo):
     assert b"second fixup" in second.commit.message
 
 
-def test_fixup_order_transitive(repo):
+def test_fixup_order_transitive(repo: Repository) -> None:
     bash(
         """
         git commit --allow-empty -m 'old'
@@ -335,7 +345,7 @@ def test_fixup_order_transitive(repo):
     assert b"2.0" in c.commit.message
 
 
-def test_fixup_order_cycle(repo):
+def test_fixup_order_cycle(repo: Repository) -> None:
     bash(
         """
         git commit --allow-empty -m 'old'
@@ -357,7 +367,7 @@ def test_fixup_order_cycle(repo):
     assert all(step.kind == StepKind.PICK for step in new_todos)
 
 
-def test_autosquash_multiline_summary(repo):
+def test_autosquash_multiline_summary(repo: Repository) -> None:
     bash(
         """
         git commit --allow-empty -m 'initial commit'
