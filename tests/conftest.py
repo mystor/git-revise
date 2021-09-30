@@ -6,6 +6,7 @@ import tempfile
 import textwrap
 import traceback
 
+from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -93,29 +94,18 @@ def fixture_short_tmpdir() -> Generator[Path, None, None]:
 
 @contextmanager
 def in_parallel(
-    func: Callable[..., Any],
+    fn: Callable[..., Any],
     *args: Any,
     **kwargs: Any,
 ) -> "Generator[None, None, None]":
-    class HelperThread(Thread):
-        exception: Optional[Exception] = None
-
-        def run(self) -> None:
-            try:
-                func(*args, **kwargs)
-            except Exception as exc:
-                traceback.print_exc()
-                self.exception = exc
-                raise
-
-    thread = HelperThread()
-    thread.start()
-    try:
-        yield
-    finally:
-        thread.join()
-    if thread.exception:
-        raise thread.exception
+    with ThreadPoolExecutor(max_workers=1) as exe:
+        try:
+            future = exe.submit(fn, *args, **kwargs)
+            yield
+            future.result()
+        except:
+            traceback.print_exc()
+            raise
 
 
 def bash(command: str) -> None:
