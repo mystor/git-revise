@@ -53,8 +53,10 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
         ).encode()
     )
 
-    # Install our fake editor
-    monkeypatch.setenv("GIT_EDITOR", EDITOR_COMMAND)
+    # If we are not expecting an editor to be launched, abort immediately.
+    # (The `false` command always exits with failure).
+    # This is overridden in editor_main.
+    monkeypatch.setenv("GIT_EDITOR", "false")
 
     # Switch into a test workdir, and init our repo
     workdir = tmp_path_factory.mktemp("workdir")
@@ -122,8 +124,10 @@ def main(args, **kwargs):
 
 @contextmanager
 def editor_main(args, **kwargs):
-    with Editor() as ed, in_parallel(main, args, **kwargs):
-        yield ed
+    with pytest.MonkeyPatch().context() as m, Editor() as ed:
+        m.setenv("GIT_EDITOR", EDITOR_COMMAND)
+        with in_parallel(main, args, **kwargs):
+            yield ed
 
 
 class EditorFile(BaseHTTPRequestHandler):
