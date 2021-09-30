@@ -14,9 +14,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import dummy_editor
 
 
-EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
-
-
 @pytest.fixture(autouse=True)
 def hermetic_seal(tmp_path_factory, monkeypatch):
     # Lock down user git configuration
@@ -202,7 +199,8 @@ class EditorFile(BaseHTTPRequestHandler):
 
 class Editor(HTTPServer):
     def __init__(self):
-        super().__init__(EDITOR_SERVER_ADDR, EditorFile)
+        # Bind to a randomly-allocated free port.
+        super().__init__(("127.0.0.1", 0), EditorFile)
         self.request_ready = Event()
         self.handle_thread = None
         self.current = None
