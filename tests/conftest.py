@@ -122,7 +122,7 @@ def editor_main(args, **kwargs):
             for p in (
                 sys.executable,
                 dummy_editor.__file__,
-                "http://{0}:{1}/".format(*EDITOR_SERVER_ADDR),
+                "http://{0}:{1}/".format(*ed.server_address[:2]),
             )
         )
         m.setenv("GIT_EDITOR", editor_cmd)
