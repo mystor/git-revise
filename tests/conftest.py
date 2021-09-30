@@ -16,7 +16,12 @@ import dummy_editor
 
 EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
 EDITOR_COMMAND = " ".join(
-    shlex.quote(p) for p in (sys.executable, dummy_editor.__file__)
+    shlex.quote(p)
+    for p in (
+        sys.executable,
+        dummy_editor.__file__,
+        "http://{0}:{1}/".format(*EDITOR_SERVER_ADDR),
+    )
 )
 
 

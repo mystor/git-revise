@@ -3,9 +3,9 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-def run_editor(path: Path) -> None:
+def run_editor(path: Path, url: str) -> None:
     # pylint: disable=invalid-name
-    with urlopen("http://127.0.0.1:8190/", data=path.read_bytes(), timeout=5) as r:
+    with urlopen(url, data=path.read_bytes(), timeout=5) as r:
         length = int(r.headers.get("content-length"))
         data = r.read(length)
         if r.status != 200:
@@ -14,4 +14,4 @@ def run_editor(path: Path) -> None:
 
 
 if __name__ == "__main__":
-    run_editor(path=Path(sys.argv[1]).resolve())
+    run_editor(url=sys.argv[1], path=Path(sys.argv[2]).resolve())
