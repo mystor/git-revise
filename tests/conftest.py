@@ -204,7 +204,7 @@ class Editor(HTTPServer):
         self.request_ready = Event()
         self.handle_thread = None
         self.current = None
-        self.timeout = 5
+        self.timeout = 10
 
     def next_file(self):
         assert self.handle_thread is None
