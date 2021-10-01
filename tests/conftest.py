@@ -136,8 +136,7 @@ def editor_main(
     # pylint: disable=redefined-builtin
     input=None,
 ):
-    # pylint: disable=invalid-name
-    with pytest.MonkeyPatch().context() as m, Editor() as ed:
+    with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed:
         host, port = ed.server_address
         editor_cmd = " ".join(
             shlex.quote(p)
@@ -147,7 +146,7 @@ def editor_main(
                 f"http://{host}:{port}/",
             )
         )
-        m.setenv("GIT_EDITOR", editor_cmd)
+        monkeypatch.setenv("GIT_EDITOR", editor_cmd)
 
         def main_wrapper():
             try:

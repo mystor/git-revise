@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 # pylint: disable=not-context-manager
 # pylint: disable=redefined-outer-name
 # pylint: disable=unused-wildcard-import
@@ -10,11 +9,11 @@ from conftest import *
 from gitrevise.merge import normalize_conflicted_file
 
 
-def history_with_two_conflicting_commits(autoUpdate: bool = False):
+def history_with_two_conflicting_commits(auto_update: bool = False):
     bash(
         f"""
         git config rerere.enabled true
-        git config rerere.autoUpdate {"true" if autoUpdate else "false"}
+        git config rerere.autoUpdate {"true" if auto_update else "false"}
         echo > file; git add file; git commit -m 'initial commit'
         echo one > file; git commit -am 'commit one'
         echo two > file; git commit -am 'commit two'
@@ -23,7 +22,7 @@ def history_with_two_conflicting_commits(autoUpdate: bool = False):
 
 
 def test_reuse_recorded_resolution(repo):
-    history_with_two_conflicting_commits(autoUpdate=True)
+    history_with_two_conflicting_commits(auto_update=True)
 
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
         flip_last_two_commits(repo, ed)
@@ -61,7 +60,7 @@ def test_reuse_recorded_resolution(repo):
 
 
 def test_rerere_no_autoupdate(repo):
-    history_with_two_conflicting_commits(autoUpdate=False)
+    history_with_two_conflicting_commits(auto_update=False)
 
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
         flip_last_two_commits(repo, ed)
@@ -155,7 +154,7 @@ def test_rerere_merge(repo):
 
 
 def test_replay_resolution_recorded_by_git(repo):
-    history_with_two_conflicting_commits(autoUpdate=True)
+    history_with_two_conflicting_commits(auto_update=True)
     # Switch the order of the last two commits, recording the conflict
     # resolution with Git itself.
     bash(
