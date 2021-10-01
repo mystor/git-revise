@@ -20,6 +20,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    TypeVar,
     Union,
     TYPE_CHECKING,
 )
@@ -33,6 +34,7 @@ from . import dummy_editor
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
+    from concurrent.futures import Future
 
 
 @pytest.fixture(name="hermetic_seal", autouse=True)
@@ -92,17 +94,20 @@ def fixture_short_tmpdir() -> Generator[Path, None, None]:
         yield Path(tdir)
 
 
+_T = TypeVar("_T")
+
+
 @contextmanager
 def in_parallel(
-    fn: Callable[..., Any],
+    fn: Callable[..., _T],
     *args: Any,
     **kwargs: Any,
-) -> "Generator[None, None, None]":
+) -> "Generator[Future[_T], None, _T]":
     with ThreadPoolExecutor(max_workers=1) as exe:
         try:
             future = exe.submit(fn, *args, **kwargs)
-            yield
-            future.result()
+            yield future
+            return future.result()
         except:
             traceback.print_exc()
             raise
