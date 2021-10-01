@@ -1,3 +1,11 @@
+[MASTER]
+# Make sure things like "import gitrevise.odb" are resolved to the source
+# when running pylint from the command line or IDE.
+init-hook=
+  import os, sys, pylint.config as plc
+  sys.path.append(os.path.dirname(plc.PYLINTRC))
+
+
 [MESSAGES CONTROL]
 
 disable=
