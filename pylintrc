@@ -22,3 +22,13 @@ disable=
     # Currently broken analyses which are also handled (better) by mypy
     class-variable-slots-conflict,
     no-member
+
+good-names=
+  # "Exception as e" is perfectly fine.
+  e,
+  # "with open(…) as f" is idiomatic.
+  f,
+  # Other contextually-unambiguous names.
+  fn,
+  repo,
+  ed
