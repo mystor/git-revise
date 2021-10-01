@@ -1,5 +1,3 @@
-# pylint: disable=not-context-manager
-
 import textwrap
 
 from gitrevise.odb import Repository
@@ -350,7 +348,6 @@ def test_normalize_conflicted_file() -> None:
 def flip_last_two_commits(repo: Repository, ed: Editor) -> None:
     head = repo.get_commit("HEAD")
     with ed.next_file() as f:
-        assert f.indata
         lines = f.indata.splitlines()
         assert lines[0].startswith(b"pick " + head.parent().oid.short().encode())
         assert lines[1].startswith(b"pick " + head.oid.short().encode())

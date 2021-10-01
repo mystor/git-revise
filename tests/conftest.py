@@ -6,21 +6,19 @@ import tempfile
 import textwrap
 import traceback
 
+from concurrent.futures import CancelledError, Future
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from threading import Thread, Event
+from queue import Empty, Queue
+from threading import Thread
 from types import TracebackType
 from typing import (
-    Any,
-    Callable,
     Generator,
     Optional,
     Sequence,
-    Tuple,
     Type,
-    TypeVar,
     Union,
     TYPE_CHECKING,
 )
@@ -34,7 +32,7 @@ from . import dummy_editor
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
-    from concurrent.futures import Future
+    from typing import Any, Tuple
 
 
 @pytest.fixture(name="hermetic_seal", autouse=True)
@@ -94,25 +92,6 @@ def fixture_short_tmpdir() -> Generator[Path, None, None]:
         yield Path(tdir)
 
 
-_T = TypeVar("_T")
-
-
-@contextmanager
-def in_parallel(
-    fn: Callable[..., _T],
-    *args: Any,
-    **kwargs: Any,
-) -> "Generator[Future[_T], None, _T]":
-    with ThreadPoolExecutor(max_workers=1) as exe:
-        try:
-            future = exe.submit(fn, *args, **kwargs)
-            yield future
-            return future.result()
-        except:
-            traceback.print_exc()
-            raise
-
-
 def bash(command: str) -> None:
     # Use a custom environment for bash commands so commits with those commands
     # have unique names and emails.
@@ -153,8 +132,8 @@ def editor_main(
     cwd: Optional["StrPath"] = None,
     # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
-) -> "Generator[Editor, None, None]":
-    with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed:
+) -> "Generator[Editor, None, subprocess.CompletedProcess[bytes]]":
+    with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed, ThreadPoolExecutor() as tpe:
         host, port = ed.server_address
         editor_cmd = " ".join(
             shlex.quote(p)
@@ -166,72 +145,32 @@ def editor_main(
         )
         monkeypatch.setenv("GIT_EDITOR", editor_cmd)
 
-        def main_wrapper() -> Optional["subprocess.CompletedProcess[bytes]"]:
-            try:
-                return main(args, cwd=cwd, input=input)
-            except Exception as e:  # pylint: disable=broad-except
-                ed.exception = e
-                return None
-            finally:
-                if not ed.exception:
-                    ed.exception = Exception(
-                        "git-revise exited without invoking editor"
-                    )
-                ed.request_ready.set()
+        # Run the command asynchronously.
+        future = tpe.submit(main, args, cwd=cwd, input=input)
 
-        with in_parallel(main_wrapper):
-            yield ed
+        # If it fails, cancel anything waiting on `ed.next_file()`.
+        def cancel_on_error(future: "Future[Any]") -> None:
+            exc = future.exception()
+            if exc:
+                ed.cancel_all_pending_edits(exc)
+
+        future.add_done_callback(cancel_on_error)
+
+        # Yield the editor, so that tests can process incoming requests via `ed.next_file()`.
+        yield ed
+
+        return future.result()
 
 
-class EditorFile(BaseHTTPRequestHandler):
-    indata: Optional[bytes]
+class EditorFile:
+    indata: bytes
     outdata: Optional[bytes]
-    server: "Editor"
 
-    def __init__(
-        self,
-        request: bytes,
-        client_address: Tuple[str, int],
-        server: "Editor",
-    ) -> None:
-        self.response_ready = Event()
-        self.indata = None
+    def __init__(self, indata: bytes) -> None:
+        self.indata = indata
         self.outdata = None
-        self.exception = None
-        super().__init__(request=request, client_address=client_address, server=server)
-
-    # pylint: disable=invalid-name
-    def do_POST(self) -> None:
-        length = int(self.headers.get("content-length"))
-        self.indata = self.rfile.read(length)
-        self.outdata = b""
-
-        # The request is ready, tell our server, and wait for a reply.
-        assert self.server.current is None
-        self.server.current = self
-        try:
-            self.server.request_ready.set()
-            if not self.response_ready.wait(timeout=self.server.timeout):
-                raise Exception("timed out waiting for reply")
-        finally:
-            self.server.current = None
-
-    def send_editor_reply(self, status: int, data: bytes) -> None:
-        assert not self.response_ready.is_set(), "already replied?"
-        self.send_response(status)
-        self.send_header("content-length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-        self.response_ready.set()
-
-        # Ensure the handle thread has shut down
-        if self.server.handle_thread is not None:
-            self.server.handle_thread.join()
-            self.server.handle_thread = None
-        assert self.server.current is None
 
     def startswith(self, text: bytes) -> bool:
-        assert self.indata is not None
         return self.indata.startswith(text)
 
     def startswith_dedent(self, text: str) -> bool:
@@ -248,71 +187,104 @@ class EditorFile(BaseHTTPRequestHandler):
             text = textwrap.dedent(text).encode()
         self.outdata = text
 
-    # pylint does not recognize these, for some reason, complaining:
-    # E1129: Context manager 'NoneType' doesn't implement __enter__ and
-    # __exit__. (not-context-manager) I suspect it gets looped up when tracing
-    # types due to the mutual touching between it and Editor.
-    def __enter__(self) -> "EditorFile":
-        return self
-
-    def __exit__(
-        self,
-        etype: Optional[Type[BaseException]],
-        evalue: Optional[BaseException],
-        tb: Optional[TracebackType],
-    ) -> None:
-        if etype is None:
-            assert self.outdata
-            self.send_editor_reply(200, self.outdata)
-        else:
-            exc = "".join(traceback.format_exception(etype, evalue, tb)).encode()
-            try:
-                self.send_editor_reply(500, exc)
-            except:  # pylint: disable=bare-except
-                pass
-
     def __repr__(self) -> str:
         return f"<EditorFile {self.indata!r}>"
 
 
+class EditorFileRequestHandler(BaseHTTPRequestHandler):
+    server: "Editor"
+
+    # pylint: disable=invalid-name
+    def do_POST(self) -> None:
+        length = int(self.headers.get("content-length"))
+        in_data = self.rfile.read(length)
+
+        try:
+            # The request is ready. Tell our server, and wait for a reply.
+            status, out_data = 200, self.server.await_edit(in_data)
+        except Exception:  # pylint: disable=broad-except
+            status, out_data = 500, traceback.format_exc().encode()
+        finally:
+            self.send_response(status)
+            self.send_header("content-length", str(len(out_data)))
+            self.end_headers()
+            self.wfile.write(out_data)
+
+
 class Editor(HTTPServer):
-    request_ready: Event
-    handle_thread: Optional[Thread]
-    current: Optional[EditorFile]
-    exception: Optional[Exception]
+    pending_edits: "Queue[Tuple[bytes, Future[bytes]]]"
+    handle_thread: Thread
     timeout: int
 
     def __init__(self) -> None:
         # Bind to a randomly-allocated free port.
-        super().__init__(("127.0.0.1", 0), EditorFile)
-        self.request_ready = Event()
-        self.handle_thread = None
-        self.current = None
-        self.exception = None
+        super().__init__(("127.0.0.1", 0), EditorFileRequestHandler)
+        self.pending_edits = Queue()
         self.timeout = 10
+        self.handle_thread = Thread(
+            name="editor-server",
+            target=lambda: self.serve_forever(poll_interval=0.01),
+        )
 
-    def next_file(self) -> EditorFile:
-        assert self.handle_thread is None
-        assert self.current is None
+    def await_edit(self, in_data: bytes) -> bytes:
+        """Enqueues an edit and then synchronously waits for it to be processed."""
+        result_future: "Future[bytes]" = Future()
+        # Add the request to be picked up when the test calls `next_file`.
+        self.pending_edits.put((in_data, result_future))
+        # Wait for the result and return it (or throw).
+        return result_future.result(timeout=self.timeout)
 
-        # Spawn a thread to handle the single request.
-        self.request_ready.clear()
-        self.handle_thread = Thread(target=self.handle_request)
-        self.handle_thread.start()
-        if not self.request_ready.wait(timeout=self.timeout):
-            raise Exception("timeout while waiting for request")
+    @contextmanager
+    def next_file(self) -> Generator[EditorFile, None, None]:
+        try:
+            in_data, result_future = self.pending_edits.get(timeout=self.timeout)
+        except Empty as e:
+            raise Exception("timeout while waiting for request") from e
 
-        if self.exception:
-            raise self.exception
+        if result_future.done() or not result_future.set_running_or_notify_cancel():
+            raise result_future.exception() or CancelledError()
 
-        # Return the request we received and were notified about.
-        assert self.current
-        return self.current
+        try:
+            editor_file = EditorFile(in_data)
 
-    def is_idle(self) -> bool:
-        return self.handle_thread is None and self.current is None
+            # Yield the request we received and were notified about.
+            # The test can modify the contents.
+            yield editor_file
+
+            assert editor_file.outdata
+            result_future.set_result(editor_file.outdata)
+        except Exception as e:
+            result_future.set_exception(e)
+            raise
+        finally:
+            self.pending_edits.task_done()
+
+    def cancel_all_pending_edits(self, exc: Optional[BaseException] = None) -> None:
+        if self.handle_thread.is_alive():
+            self.shutdown()
+
+        # Cancel all of the pending edit requests.
+        while True:
+            try:
+                _body, task = self.pending_edits.get_nowait()
+            except Empty:
+                break
+            if task.cancel():
+                self.pending_edits.task_done()
+
+        # If there were no edit requests, the main test thread may be blocked on `next_file`.
+        # Give that thread a canceled future to wake it up.
+        canceled_future: "Future[bytes]" = Future()
+        canceled_future.set_exception(exc or CancelledError())
+        self.pending_edits.put_nowait((b"cancelled", canceled_future))
+
+    def server_close(self) -> None:
+        self.handle_thread.join()
+        super().server_close()
 
     def __enter__(self) -> "Editor":
+        super().__enter__()
+        self.handle_thread.start()
         return self
 
     # The super class just defines this as *args.
@@ -326,11 +298,10 @@ class Editor(HTTPServer):
         try:
             # Only assert if we're not already raising an exception.
             if etype is None:
-                assert self.is_idle()
+                assert self.pending_edits.empty()
         finally:
-            self.server_close()
-            if self.current:
-                self.current.send_editor_reply(500, b"editor server was shut down")
+            self.cancel_all_pending_edits(value)
+            super().__exit__(etype, value, tb)
 
 
 __all__ = (
