@@ -1,4 +1,8 @@
-# pylint: skip-file
+# pylint: disable=invalid-name
+# pylint: disable=not-context-manager
+# pylint: disable=redefined-outer-name
+# pylint: disable=unused-wildcard-import
+# pylint: disable=wildcard-import
 
 import textwrap
 

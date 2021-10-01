@@ -1,4 +1,8 @@
-# pylint: skip-file
+# pylint: disable=not-context-manager
+# pylint: disable=redefined-outer-name
+# pylint: disable=unused-wildcard-import
+# pylint: disable=wildcard-import
+# pylint: disable=wrong-import-order
 
 from conftest import *
 from gitrevise.utils import commit_range
@@ -327,7 +331,7 @@ def test_fixup_order_transitive(repo):
     assert tip.persisted
 
     todos = build_todos(commit_range(old, tip), index=None)
-    [target, a, b, c] = autosquash_todos(todos)
+    [target, a, b, c] = autosquash_todos(todos)  # pylint: disable=invalid-name
 
     assert b"target commit" in target.commit.message
     assert b"1.0" in a.commit.message

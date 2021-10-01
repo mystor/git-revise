@@ -1,4 +1,7 @@
-# pylint: skip-file
+# pylint: disable=redefined-outer-name
+# pylint: disable=wildcard-import
+# pylint: disable=unused-wildcard-import
+# pylint: disable=not-context-manager
 
 import pytest
 from conftest import *

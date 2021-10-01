@@ -1,4 +1,5 @@
-# pylint: skip-file
+# pylint: disable=redefined-outer-name
+# pylint: disable=wrong-import-order
 
 import pytest
 import shlex
@@ -59,6 +60,7 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture
+# pylint: disable=unused-argument
 def repo(hermetic_seal):
     with Repository() as repo:
         yield repo
@@ -115,30 +117,43 @@ def changeline(path, lineno, newline):
 
 
 # Run the main entry point for git-revise in a subprocess.
-def main(args, **kwargs):
-    kwargs.setdefault("check", True)
+def main(
+    args,
+    cwd=None,
+    # pylint: disable=redefined-builtin
+    input=None,
+    check=True,
+):
     cmd = [sys.executable, "-m", "gitrevise", *args]
-    print("Running", cmd, kwargs)
-    return subprocess.run(cmd, **kwargs)
+    print("Running", cmd, dict(cwd=cwd, input=input, check=check))
+    return subprocess.run(cmd, cwd=cwd, input=input, check=check)
 
 
 @contextmanager
-def editor_main(args, **kwargs):
+def editor_main(
+    args,
+    cwd=None,
+    # pylint: disable=redefined-builtin
+    input=None,
+):
+    # pylint: disable=invalid-name
     with pytest.MonkeyPatch().context() as m, Editor() as ed:
         editor_cmd = " ".join(
             shlex.quote(p)
             for p in (
                 sys.executable,
                 dummy_editor.__file__,
+                # pylint: disable=consider-using-f-string
                 "http://{0}:{1}/".format(*ed.server_address[:2]),
             )
         )
         m.setenv("GIT_EDITOR", editor_cmd)
 
+        # pylint: disable=inconsistent-return-statements
         def main_wrapper():
             try:
-                return main(args, **kwargs)
-            except Exception as e:
+                return main(args, cwd=cwd, input=input)
+            except Exception as e:  # pylint: disable=broad-except
                 ed.exception = e
             finally:
                 if not ed.exception:
@@ -159,6 +174,7 @@ class EditorFile(BaseHTTPRequestHandler):
         self.exception = None
         super().__init__(*args, **kwargs)
 
+    # pylint: disable=invalid-name
     def do_POST(self):
         length = int(self.headers.get("content-length"))
         self.indata = self.rfile.read(length)
@@ -204,6 +220,10 @@ class EditorFile(BaseHTTPRequestHandler):
             text = textwrap.dedent(text).encode()
         self.outdata = text
 
+    # pylint does not recognize these, for some reason, complaining:
+    # E1129: Context manager 'NoneType' doesn't implement __enter__ and
+    # __exit__. (not-context-manager) I suspect it gets looped up when tracing
+    # types due to the mutual touching between it and Editor.
     def __enter__(self):
         return self
 
@@ -214,7 +234,7 @@ class EditorFile(BaseHTTPRequestHandler):
             exc = "".join(traceback.format_exception(etype, evalue, tb)).encode()
             try:
                 self.send_editor_reply(500, exc)
-            except:
+            except:  # pylint: disable=bare-except
                 pass
 
     def __repr__(self):
@@ -255,6 +275,8 @@ class Editor(HTTPServer):
     def __enter__(self):
         return self
 
+    # The super class just defines this as *args.
+    # pylint: disable=arguments-differ
     def __exit__(self, etype, value, tb):
         try:
             # Only assert if we're not already raising an exception.
