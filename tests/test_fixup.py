@@ -1,12 +1,11 @@
 # pylint: disable=not-context-manager
 # pylint: disable=unused-wildcard-import
 # pylint: disable=wildcard-import
-# pylint: disable=wrong-import-order
 
-from conftest import *
+import os
 from gitrevise.utils import commit_range
 from gitrevise.todo import StepKind, build_todos, autosquash_todos
-import os
+from conftest import *  # pylint: disable=wrong-import-order
 
 
 @pytest.fixture(name="basic_repo")

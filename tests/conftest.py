@@ -1,20 +1,21 @@
-# pylint: disable=wrong-import-order
-
-import pytest
-import shlex
 import os
+import shlex
+import subprocess
 import sys
 import tempfile
 import textwrap
-import subprocess
 import traceback
+
+from contextlib import contextmanager
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+from threading import Thread, Event
+
+import pytest
+
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_path
-from contextlib import contextmanager
-from threading import Thread, Event
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import dummy_editor
+import dummy_editor  # pylint: disable=wrong-import-order
 
 
 @pytest.fixture(name="hermetic_seal", autouse=True)

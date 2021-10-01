@@ -4,8 +4,8 @@
 
 import textwrap
 
-from conftest import *
 from gitrevise.merge import normalize_conflicted_file
+from conftest import *  # pylint: disable=wrong-import-order
 
 
 def history_with_two_conflicting_commits(auto_update: bool = False):

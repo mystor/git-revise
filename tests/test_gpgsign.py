@@ -1,10 +1,9 @@
 # pylint: disable=unused-wildcard-import
 # pylint: disable=wildcard-import
-# pylint: disable=wrong-import-order
 
-from conftest import *
 from subprocess import CalledProcessError
 from gitrevise.utils import sh_run
+from conftest import *  # pylint: disable=wrong-import-order
 
 
 def test_gpgsign(repo, short_tmpdir, monkeypatch):
