@@ -1,5 +1,4 @@
 # pylint: disable=not-context-manager
-# pylint: disable=redefined-outer-name
 # pylint: disable=unused-wildcard-import
 # pylint: disable=wildcard-import
 

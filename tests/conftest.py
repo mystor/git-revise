@@ -1,4 +1,3 @@
-# pylint: disable=redefined-outer-name
 # pylint: disable=wrong-import-order
 
 import pytest
@@ -18,8 +17,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import dummy_editor
 
 
-@pytest.fixture(autouse=True)
-def hermetic_seal(tmp_path_factory, monkeypatch):
+@pytest.fixture(name="hermetic_seal", autouse=True)
+def fixture_hermetic_seal(tmp_path_factory, monkeypatch):
     # Lock down user git configuration
     home = tmp_path_factory.mktemp("home")
     xdg_config_home = home / ".config"
@@ -59,15 +58,15 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
     bash("git init -q")
 
 
-@pytest.fixture
+@pytest.fixture(name="repo")
 # pylint: disable=unused-argument
-def repo(hermetic_seal):
+def fixture_repo(hermetic_seal):
     with Repository() as repo:
         yield repo
 
 
-@pytest.fixture
-def short_tmpdir():
+@pytest.fixture(name="short_tmpdir")
+def fixture_short_tmpdir():
     with tempfile.TemporaryDirectory() as tdir:
         yield Path(tdir)
 

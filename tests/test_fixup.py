@@ -1,5 +1,4 @@
 # pylint: disable=not-context-manager
-# pylint: disable=redefined-outer-name
 # pylint: disable=unused-wildcard-import
 # pylint: disable=wildcard-import
 # pylint: disable=wrong-import-order
@@ -10,8 +9,8 @@ from gitrevise.todo import StepKind, build_todos, autosquash_todos
 import os
 
 
-@pytest.fixture
-def basic_repo(repo):
+@pytest.fixture(name="basic_repo")
+def fixture_basic_repo(repo):
     bash(
         """
         cat <<EOF >file1
