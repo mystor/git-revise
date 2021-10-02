@@ -23,7 +23,7 @@ from .odb import Tree, Blob, Commit, Entry, Mode, Repository
 from .utils import edit_file
 
 
-T = TypeVar("T")  # pylint: disable=C0103
+T = TypeVar("T")  # pylint: disable=invalid-name
 
 
 class MergeConflict(Exception):

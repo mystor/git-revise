@@ -1,13 +1,15 @@
-# pylint: skip-file
-
-from conftest import *
+import os
+from pathlib import Path
 from subprocess import CalledProcessError
+import pytest
+from gitrevise.odb import Repository
 from gitrevise.utils import sh_run
+from .conftest import bash, main
 
 
 def test_gpgsign(
     repo: Repository,
-    short_tmpdir: py.path.local,
+    short_tmpdir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bash("git commit --allow-empty -m 'commit 1'")
@@ -30,7 +32,7 @@ def test_gpgsign(
         monkeypatch.setenv("GNUPGHOME", str(gnupghome))
 
     gnupghome.chmod(0o700)
-    (gnupghome / "gpg.conf").write("pinentry-mode loopback")
+    (gnupghome / "gpg.conf").write_text("pinentry-mode loopback")
     user_ident = repo.default_author.signing_key
     sh_run(
         ["gpg", "--batch", "--passphrase", "", "--quick-gen-key", user_ident],

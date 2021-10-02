@@ -1,7 +1,17 @@
-# pylint: skip-file
+# pylint: disable=not-context-manager
 
+from typing import (
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+)
 import pytest
-from conftest import *
+from gitrevise.odb import Repository
+from .conftest import bash, editor_main
+
+
+if TYPE_CHECKING:
+    from _typeshed import StrPath
 
 
 def interactive_reorder_helper(repo: Repository, cwd: "StrPath") -> None:

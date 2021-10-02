@@ -1,6 +1,7 @@
-# pylint: skip-file
+# pylint: disable=not-context-manager
 
-from conftest import *
+from gitrevise.odb import Repository
+from .conftest import bash, editor_main
 
 
 def test_cut(repo: Repository) -> None:
