@@ -29,8 +29,10 @@ writing them when necessary. This allows it to be significantly faster on
 large codebases, and avoid invalidating builds.
 
 If :option:`--autosquash` or :option:`--interactive` is specified, the
-<target> argument is optional. If it is omitted, :program:`git revise` will
-consider a range of unpublished commits on the current branch.
+<target> argument may be omitted or given as the special value `:option:--root`.
+If it is omitted, :program:`git revise` will consider a range of unpublished
+commits on the current branch. If given as `:option:--root`, all commits
+including the root commit will be considered.
 
 OPTIONS
 =======

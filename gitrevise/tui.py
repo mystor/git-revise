@@ -149,7 +149,10 @@ def noninteractive(
     assert head.target is not None
 
     if args.root:
-        raise ValueError("Incompatible option: --root requires --interactive")
+        raise ValueError(
+            "Incompatible option: "
+            "--root may only be used with --autosquash or --interactive"
+        )
 
     if args.target is None:
         raise ValueError("<target> is a required argument")
