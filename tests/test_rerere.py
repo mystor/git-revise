@@ -1,11 +1,10 @@
 # pylint: disable=not-context-manager
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
 
 import textwrap
 
+from gitrevise.odb import Repository
 from gitrevise.merge import normalize_conflicted_file
-from .conftest import *
+from .conftest import bash, changeline, main, editor_main, Editor
 
 
 def history_with_two_conflicting_commits(auto_update: bool = False):

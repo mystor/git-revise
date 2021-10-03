@@ -285,3 +285,12 @@ class Editor(HTTPServer):
             self.server_close()
             if self.current:
                 self.current.send_editor_reply(500, b"editor server was shut down")
+
+
+__all__ = (
+    "bash",
+    "changeline",
+    "editor_main",
+    "main",
+    "Editor",
+)

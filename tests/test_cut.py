@@ -1,8 +1,6 @@
 # pylint: disable=not-context-manager
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
 
-from .conftest import *
+from .conftest import bash, editor_main
 
 
 def test_cut(repo):

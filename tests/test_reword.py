@@ -1,9 +1,8 @@
 # pylint: disable=not-context-manager
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
 
 import textwrap
-from .conftest import *
+import pytest
+from .conftest import bash, main, editor_main
 
 
 @pytest.mark.parametrize("target", ["HEAD", "HEAD~", "HEAD~~"])

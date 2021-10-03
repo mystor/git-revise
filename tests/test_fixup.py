@@ -1,11 +1,11 @@
 # pylint: disable=not-context-manager
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
 
 import os
+from contextlib import contextmanager
+import pytest
 from gitrevise.utils import commit_range
 from gitrevise.todo import StepKind, build_todos, autosquash_todos
-from .conftest import *
+from .conftest import bash, main, editor_main
 
 
 @pytest.fixture(name="basic_repo")

@@ -1,9 +1,7 @@
-# pylint: disable=wildcard-import
-# pylint: disable=unused-wildcard-import
 # pylint: disable=not-context-manager
 
 import pytest
-from .conftest import *
+from .conftest import bash, editor_main
 
 
 def interactive_reorder_helper(repo, cwd):

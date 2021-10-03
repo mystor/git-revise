@@ -1,9 +1,7 @@
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
-
+import os
 from subprocess import CalledProcessError
 from gitrevise.utils import sh_run
-from .conftest import *
+from .conftest import bash, main
 
 
 def test_gpgsign(repo, short_tmpdir, monkeypatch):
