@@ -1,36 +1,17 @@
 # pylint: skip-file
 
 import pytest
-import shutil
 import shlex
 import os
 import sys
 import textwrap
 import subprocess
 import traceback
-import time
-from pathlib import Path
 from gitrevise.odb import Repository
 from contextlib import contextmanager
 from threading import Thread, Event
 from http.server import HTTPServer, BaseHTTPRequestHandler
-
-
-EDITOR_SERVER_ADDR = ("127.0.0.1", 8190)
-EDITOR_SCRIPT = """\
-import sys
-from pathlib import Path
-from urllib.request import urlopen
-
-path = Path(sys.argv[1]).resolve()
-with urlopen('http://127.0.0.1:8190/', data=path.read_bytes(), timeout=5) as r:
-    length = int(r.headers.get('content-length'))
-    data = r.read(length)
-    if r.status != 200:
-        raise Exception(data.decode())
-path.write_bytes(data)
-"""
-EDITOR_COMMAND = " ".join(shlex.quote(p) for p in (sys.executable, "-c", EDITOR_SCRIPT))
+import dummy_editor
 
 
 @pytest.fixture(autouse=True)
@@ -61,8 +42,10 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
         ).encode()
     )
 
-    # Install our fake editor
-    monkeypatch.setenv("GIT_EDITOR", EDITOR_COMMAND)
+    # If we are not expecting an editor to be launched, abort immediately.
+    # (The `false` command always exits with failure).
+    # This is overridden in editor_main.
+    monkeypatch.setenv("GIT_EDITOR", "false")
 
     # Switch into a test workdir, and init our repo
     workdir = tmp_path_factory.mktemp("workdir")
@@ -130,8 +113,19 @@ def main(args, **kwargs):
 
 @contextmanager
 def editor_main(args, **kwargs):
-    with Editor() as ed, in_parallel(main, args, **kwargs):
-        yield ed
+    with pytest.MonkeyPatch().context() as m, Editor() as ed:
+        editor_cmd = " ".join(
+            shlex.quote(p)
+            for p in (
+                sys.executable,
+                dummy_editor.__file__,
+                "http://{0}:{1}/".format(*ed.server_address[:2]),
+            )
+        )
+        m.setenv("GIT_EDITOR", editor_cmd)
+
+        with in_parallel(main, args, **kwargs):
+            yield ed
 
 
 class EditorFile(BaseHTTPRequestHandler):
@@ -205,11 +199,12 @@ class EditorFile(BaseHTTPRequestHandler):
 
 class Editor(HTTPServer):
     def __init__(self):
-        super().__init__(EDITOR_SERVER_ADDR, EditorFile)
+        # Bind to a randomly-allocated free port.
+        super().__init__(("127.0.0.1", 0), EditorFile)
         self.request_ready = Event()
         self.handle_thread = None
         self.current = None
-        self.timeout = 5
+        self.timeout = 10
 
     def next_file(self):
         assert self.handle_thread is None
