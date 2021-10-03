@@ -6,6 +6,7 @@ import sys
 from .odb import Repository, Commit, Reference
 from .utils import (
     EditorError,
+    HookError,
     commit_range,
     edit_commit_message,
     update_head,
@@ -217,13 +218,19 @@ def main(argv: Optional[List[str]] = None) -> None:
         with Repository() as repo:
             inner_main(args, repo)
     except CalledProcessError as err:
-        print(f"subprocess exited with non-zero status: {err.returncode}")
+        if err.returncode != 0:
+            print(f"subprocess exited with non-zero status: {err.returncode}")
+        else:
+            print(f"subprocess error: {err}")
         sys.exit(1)
     except EditorError as err:
         print(f"editor error: {err}")
         sys.exit(1)
     except MergeConflict as err:
         print(f"merge conflict: {err}")
+        sys.exit(1)
+    except HookError as err:
+        print(f"{err} hook declined")
         sys.exit(1)
     except ValueError as err:
         print(f"invalid value: {err}")

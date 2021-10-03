@@ -126,6 +126,13 @@ Configuration is managed by :manpage:`git-config(1)`.
    is specified. Overridden by :option:`--no-autosquash`. Defaults to false. If
    not set, the value of ``rebase.autoSquash`` is used instead.
 
+.. gitconfig:: revise.run-hooks.commit-msg
+
+   If set to true the **commit-msg** hook will be run after exiting the
+   editor. Defaults to false, because (unlike with :manpage:`git-rebase(1)`)
+   the worktree state might not reflect the commit state. If the hook takes
+   the worktree state into account, it might behave differently.
+
 
 CONFLICT RESOLUTION
 ===================

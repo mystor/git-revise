@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
@@ -11,6 +11,10 @@ from .odb import Repository, Commit, Tree, Oid, Reference
 
 
 class EditorError(Exception):
+    pass
+
+
+class HookError(Exception):
     pass
 
 
@@ -57,7 +61,9 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
     return base, commits
 
 
-def edit_file_with_editor(editor: str, path: Path) -> bytes:
+def edit_file_with_editor(
+    editor: str, path: Path, post_fn: Optional[Callable[[Path], None]] = None
+) -> bytes:
     try:
         if os.name == "nt":
             # The popular "Git for Windows" distribution uses a bundled msys
@@ -71,6 +77,10 @@ def edit_file_with_editor(editor: str, path: Path) -> bytes:
         run(cmd, check=True, cwd=path.parent)
     except CalledProcessError as err:
         raise EditorError(f"Editor exited with status {err}") from err
+
+    if post_fn:
+        post_fn(path)
+
     return path.read_bytes()
 
 
@@ -127,6 +137,7 @@ def run_specific_editor(
     comments: Optional[str] = None,
     allow_empty: bool = False,
     allow_whitespace_before_comments: bool = False,
+    post_fn: Optional[Callable[[Path], None]] = None,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
     path = repo.get_tempdir() / filename
@@ -144,7 +155,7 @@ def run_specific_editor(
                 handle.write(b"\n")
 
     # Invoke the editor
-    data = edit_file_with_editor(editor, path)
+    data = edit_file_with_editor(editor, path, post_fn)
     if comments:
         data = strip_comments(
             data,
@@ -172,6 +183,7 @@ def run_editor(
     text: bytes,
     comments: Optional[str] = None,
     allow_empty: bool = False,
+    post_fn: Optional[Callable[[Path], None]] = None,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
     return run_specific_editor(
@@ -181,6 +193,7 @@ def run_editor(
         text=text,
         comments=comments,
         allow_empty=allow_empty,
+        post_fn=post_fn,
     )
 
 
@@ -215,6 +228,31 @@ def run_sequence_editor(
     )
 
 
+def create_commit_msg_caller(repo: Repository) -> Optional[Callable[[Path], None]]:
+    """Return a function which calls the "commit-msg" hook if it is
+    present"""
+
+    hooks_path = repo.config("core.hooksPath", b"")
+
+    if not hooks_path:
+        commit_msg_hook = os.path.join(
+            repo.git("rev-parse", "--git-common-dir"), b"hooks/commit-msg"
+        )
+    else:
+        commit_msg_hook = os.path.join(hooks_path, b"commit-msg")
+
+    def run_commit_msg(filepath: Path) -> None:
+        # If the hook script is present but not executable git would warn
+        # (unless `git config advice.ignoredHook false` is set), but git-revise
+        # silently ignores that file.
+        if os.access(commit_msg_hook, os.X_OK):
+            # stderr/stdout of the hook are passed through
+            if run([commit_msg_hook, filepath]).returncode != 0:
+                raise HookError("commit-msg")
+
+    return run_commit_msg
+
+
 def edit_commit_message(commit: Commit) -> Commit:
     """Launch an editor to edit the commit message of ``commit``, returning
     a modified commit"""
@@ -231,7 +269,19 @@ def edit_commit_message(commit: Commit) -> Commit:
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
 
-    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, comments=comments)
+    if repo.bool_config("revise.run-hooks.commit-msg", default=False):
+        hook = create_commit_msg_caller(commit.repo)
+    else:
+        hook = None
+
+    message = run_editor(
+        repo,
+        "COMMIT_EDITMSG",
+        commit.message,
+        comments=comments,
+        post_fn=hook,
+    )
+
     return commit.update(message=message)
 
 
