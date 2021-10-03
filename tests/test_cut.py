@@ -44,3 +44,43 @@ def test_cut(repo):
     assert new_u2.message == b"part 2\n"
     assert new_u1.message == b"part 1\n"
     assert new_uu == prev_uu
+
+
+def test_cut_root(repo):
+    bash(
+        """
+        echo "Hello, World" >> file1
+        echo "Make f2" >> file2
+        git add file1 file2
+        git commit -m "root commit"
+        """
+    )
+
+    prev = repo.get_commit("HEAD")
+    assert prev.is_root
+    assert len(prev.parent_oids) == 0
+
+    with editor_main(["--cut", "HEAD"], input=b"y\nn\n") as ed:
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[1] root commit\n")
+            f.replace_dedent("part 1\n")
+
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[2] root commit\n")
+            f.replace_dedent("part 2\n")
+
+    new = repo.get_commit("HEAD")
+    assert new != prev
+    assert new.message == b"part 2\n"
+
+    assert not new.is_root
+    assert len(new.parent_oids) == 1
+
+    new_u = new.parent()
+    assert new_u.message == b"part 1\n"
+    assert new_u.is_root
+    assert len(new_u.parent_oids) == 0
+    assert new_u.parent_tree() == prev.parent_tree()
+
+    assert new_u != new
+    assert new_u != prev

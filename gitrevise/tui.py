@@ -196,7 +196,7 @@ def inner_main(args: Namespace, repo: Repository) -> None:
     staged = None
     if not args.no_index:
         staged = repo.index.commit(message=b"<git index>")
-        if staged.tree() == staged.parent().tree():
+        if staged.tree() == staged.parent_tree():
             staged = None  # No changes, ignore the commit
 
     # Determine the HEAD reference which we're going to update.
