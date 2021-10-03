@@ -29,8 +29,10 @@ writing them when necessary. This allows it to be significantly faster on
 large codebases, and avoid invalidating builds.
 
 If :option:`--autosquash` or :option:`--interactive` is specified, the
-<target> argument is optional. If it is omitted, :program:`git revise` will
-consider a range of unpublished commits on the current branch.
+<target> argument may be omitted or given as the special value `:option:--root`.
+If it is omitted, :program:`git revise` will consider a range of unpublished
+commits on the current branch. If given as `:option:--root`, all commits
+including the root commit will be considered.
 
 OPTIONS
 =======
@@ -169,6 +171,13 @@ This mode is started with the last commit you want to retain "as-is":
 .. code-block:: bash
 
     git revise -i <after-this-commit>
+
+The special target `--root` is available to revise everything up to the root
+commit:
+
+.. code-block:: bash
+
+    git revise -i --root
 
 An editor will be fired up with the commits in your current branch after the
 given commit. If the index has any staged but uncommitted changes, a ``<git

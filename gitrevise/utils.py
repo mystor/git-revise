@@ -14,12 +14,14 @@ class EditorError(Exception):
     pass
 
 
-def commit_range(base: Commit, tip: Commit) -> List[Commit]:
+def commit_range(base: Optional[Commit], tip: Commit) -> List[Commit]:
     """Oldest-first iterator over the given commit range,
     not including the commit ``base``"""
     commits = []
     while tip != base:
         commits.append(tip)
+        if tip.is_root and base is None:
+            break
         tip = tip.parent()
     commits.reverse()
     return commits
