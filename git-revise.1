@@ -1,8 +1,5 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "GIT-REVISE" "1" "Jun 07, 2020" "0.6.0" "git-revise"
-.SH NAME
-git-revise \- Efficiently update, split, and rearrange git commits
 .
 .nr rst2man-indent-level 0
 .
@@ -30,6 +27,9 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
+.TH "GIT-REVISE" "1" "Jul 30, 2021" "0.6.0" "git-revise"
+.SH NAME
+git-revise \- Efficiently update, split, and rearrange git commits
 .SH SYNOPSIS
 .sp
 \fIgit revise\fP [<options>] [<target>]
@@ -78,6 +78,12 @@ Reset target commit\(aqs author to the current user.
 .TP
 .B \-\-ref <gitref>
 Working branch to update; defaults to \fBHEAD\fP\&.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-S, \-\-gpg\-sign, \-\-no\-gpg\-sign
+GPG\-sign commits.  Overrides both the \fBcommit.gpgSign\fP and
+\fBrevise.gpgSign\fP git configurations.
 .UNINDENT
 .SS Main modes of operation
 .INDENT 0.0
@@ -146,6 +152,14 @@ Configuration is managed by \fBgit\-config(1)\fP\&.
 If set to true, imply \fI\%\-\-autosquash\fP whenever \fI\%\-\-interactive\fP
 is specified. Overridden by \fI\%\-\-no\-autosquash\fP\&. Defaults to false. If
 not set, the value of \fBrebase.autoSquash\fP is used instead.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B revise.gpgSign
+If set to true, GPG\-sign new commits; defaults to false.  This setting
+overrides the original git configuration \fBcommit.gpgSign\fP and may be
+overridden by the command line options \fB\-\-gpg\-sign\fP and
+\fB\-\-no\-gpg\-sign\fP\&.
 .UNINDENT
 .SH CONFLICT RESOLUTION
 .sp

@@ -7,6 +7,7 @@
 * Use `GIT_SEQUENCE_EDITOR` instead of `SEQUENCE_EDITOR` (#71)
 * Fix handling of multiline commit subjects (#86)
 * Add support for interactively revising or autosquashing the root commit via `--root`
+* Add support for `commit.gpgSign` (#46)
 
 ## v0.6.0
 

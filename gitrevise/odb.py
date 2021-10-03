@@ -17,6 +17,7 @@ from typing import (
     Tuple,
     cast,
 )
+import sys
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
@@ -30,6 +31,13 @@ class MissingObject(Exception):
 
     def __init__(self, ref: str) -> None:
         Exception.__init__(self, f"Object {ref} does not exist")
+
+
+class GPGSignError(Exception):
+    """Exception raised when we fail to sign a commit"""
+
+    def __init__(self, stderr: str) -> None:
+        Exception.__init__(self, f"unable to sign object: {stderr}")
 
 
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -80,7 +88,10 @@ class Signature(bytes):
 
     sig_re = re.compile(
         rb"""
-        (?P<name>[^<>]+)<(?P<email>[^<>]+)>[ ]
+        (?P<signing_key>
+            (?P<name>[^<>]+)<(?P<email>[^<>]+)>
+        )
+        [ ]
         (?P<timestamp>[0-9]+)
         (?:[ ](?P<offset>[\+\-][0-9]+))?
         """,
@@ -100,6 +111,13 @@ class Signature(bytes):
         match = self.sig_re.fullmatch(self)
         assert match, "invalid signature"
         return match.group("email").strip()
+
+    @property
+    def signing_key(self) -> bytes:
+        """user name <email>"""
+        match = self.sig_re.fullmatch(self)
+        assert match, "invalid signature"
+        return match.group("signing_key").strip()
 
     @property
     def timestamp(self) -> bytes:
@@ -134,6 +152,12 @@ class Repository:
     index: "Index"
     """current index state"""
 
+    sign_commits: bool
+    """sign commits with gpg"""
+
+    gpg: bytes
+    """path to GnuPG binary"""
+
     _objects: Dict[int, Dict[Oid, "GitObj"]]
     _catfile: Popen
     _tempdir: Optional[TemporaryDirectory]
@@ -144,6 +168,8 @@ class Repository:
         "default_author",
         "default_committer",
         "index",
+        "sign_commits",
+        "gpg",
         "_objects",
         "_catfile",
         "_tempdir",
@@ -161,6 +187,12 @@ class Repository:
         self.default_committer = Signature(self.git("var", "GIT_COMMITTER_IDENT"))
 
         self.index = Index(self)
+
+        self.sign_commits = self.bool_config(
+            "revise.gpgSign", default=self.bool_config("commit.gpgSign", default=False)
+        )
+
+        self.gpg = self.config("gpg.program", default=b"gpg")
 
         # Pylint 2.8 emits a false positive; fixed in 2.9.
         self._catfile = Popen(  # pylint: disable=consider-using-with
@@ -274,9 +306,42 @@ class Repository:
             body += b"parent " + parent.oid.hex().encode() + b"\n"
         body += b"author " + author + b"\n"
         body += b"committer " + committer + b"\n"
-        body += b"\n"
-        body += message
+
+        body_tail = b"\n" + message
+        body += self.sign_buffer(body + body_tail)
+        body += body_tail
+
         return Commit(self, body)
+
+    def sign_buffer(self, buffer: bytes) -> bytes:
+        """Return the text of the signed commit object."""
+        if not self.sign_commits:
+            return b""
+
+        key_id = self.config(
+            "user.signingKey", default=self.default_committer.signing_key
+        )
+        gpg = None
+        try:
+            gpg = run(
+                (self.gpg, "--status-fd=2", "-bsau", key_id),
+                stdout=PIPE,
+                stderr=PIPE,
+                input=buffer,
+                check=True,
+            )
+        except CalledProcessError as gpg:
+            print(gpg.stderr.decode(), file=sys.stderr, end="")
+            print("gpg failed to sign commit", file=sys.stderr)
+            raise
+
+        if b"\n[GNUPG:] SIG_CREATED " not in gpg.stderr:
+            raise GPGSignError(gpg.stderr.decode())
+
+        signature = b"gpgsig"
+        for line in gpg.stdout.splitlines():
+            signature += b" " + line + b"\n"
+        return signature
 
     def new_tree(self, entries: Mapping[bytes, "Entry"]) -> "Tree":
         """Directly create an in-memory tree object, without persisting it.
@@ -476,10 +541,13 @@ class Commit(GitObj):
     committer: Signature
     """:class:`Signature` of this commit's committer"""
 
+    gpgsig: Optional[bytes]
+    """GPG signature of this commit"""
+
     message: bytes
     """Body of this commit's message"""
 
-    __slots__ = ("tree_oid", "parent_oids", "author", "committer", "message")
+    __slots__ = ("tree_oid", "parent_oids", "author", "committer", "gpgsig", "message")
 
     def _parse_body(self) -> None:
         # Split the header from the core commit message.
@@ -493,6 +561,7 @@ class Commit(GitObj):
             key, value = hdr.split(maxsplit=1)
             value = value.replace(b"\n ", b"\n")
 
+            self.gpgsig = None
             if key == b"tree":
                 self.tree_oid = Oid.fromhex(value.decode())
             elif key == b"parent":
@@ -501,6 +570,8 @@ class Commit(GitObj):
                 self.author = Signature(value)
             elif key == b"committer":
                 self.committer = Signature(value)
+            elif key == b"gpgsig":
+                self.gpgsig = value
 
     def tree(self) -> "Tree":
         """``tree`` object corresponding to this commit"""
@@ -551,6 +622,7 @@ class Commit(GitObj):
         parents: Optional[Sequence["Commit"]] = None,
         message: Optional[bytes] = None,
         author: Optional[Signature] = None,
+        recommit: bool = False,
     ) -> "Commit":
         """Create a new commit with specific properties updated or replaced"""
         # Compute parameters used to create the new object.
@@ -563,16 +635,18 @@ class Commit(GitObj):
         if author is None:
             author = self.author
 
-        # Check if the commit was unchanged to avoid creating a new commit if
-        # only the committer has changed.
-        unchanged = (
-            tree == self.tree()
-            and parents == self.parents()
-            and message == self.message
-            and author == self.author
-        )
-        if unchanged:
-            return self
+        if not recommit:
+            # Check if the commit was unchanged to avoid creating a new commit if
+            # only the committer has changed.
+            unchanged = (
+                tree == self.tree()
+                and parents == self.parents()
+                and message == self.message
+                and author == self.author
+            )
+            if unchanged:
+                return self
+
         return self.repo.new_commit(tree, parents, message, author)
 
     def _persist_deps(self) -> None:

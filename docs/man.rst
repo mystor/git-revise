@@ -60,6 +60,11 @@ General options
 
    Working branch to update; defaults to ``HEAD``.
 
+.. option:: -S, --gpg-sign, --no-gpg-sign
+
+   GPG-sign commits.  Overrides both the ``commit.gpgSign`` and
+   ``revise.gpgSign`` git configurations.
+
 Main modes of operation
 -----------------------
 
@@ -127,6 +132,13 @@ Configuration is managed by :manpage:`git-config(1)`.
    If set to true, imply :option:`--autosquash` whenever :option:`--interactive`
    is specified. Overridden by :option:`--no-autosquash`. Defaults to false. If
    not set, the value of ``rebase.autoSquash`` is used instead.
+
+.. gitconfig:: revise.gpgSign
+
+   If set to true, GPG-sign new commits; defaults to false.  This setting
+   overrides the original git configuration ``commit.gpgSign`` and may be
+   overridden by the command line options ``--gpg-sign`` and
+   ``--no-gpg-sign``.
 
 
 CONFLICT RESOLUTION
