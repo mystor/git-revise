@@ -240,16 +240,24 @@ def edit_todos(
     return result
 
 
-def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> Commit:
+def apply_todos(
+    current: Optional[Commit],
+    todos: List[Step],
+    reauthor: bool = False,
+) -> Commit:
     for step in todos:
         rebased = step.commit.rebase(current).update(message=step.message)
         if step.kind == StepKind.PICK:
             current = rebased
         elif step.kind == StepKind.FIXUP:
+            if current is None:
+                raise ValueError("Cannot apply fixup as first commit")
             current = current.update(tree=rebased.tree())
         elif step.kind == StepKind.REWORD:
             current = edit_commit_message(rebased)
         elif step.kind == StepKind.SQUASH:
+            if current is None:
+                raise ValueError("Cannot apply squash as first commit")
             fused = current.message + b"\n\n" + rebased.message
             current = current.update(tree=rebased.tree(), message=fused)
             current = edit_commit_message(current)
@@ -264,5 +272,8 @@ def apply_todos(current: Commit, todos: List[Step], reauthor: bool = False) -> C
             current = current.update(author=current.repo.default_author)
 
         print(f"{step.kind.value:6} {current.oid.short()}  {current.summary()}")
+
+    if current is None:
+        raise ValueError("No commits introduced on top of root commit")
 
     return current

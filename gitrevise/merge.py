@@ -28,21 +28,34 @@ class MergeConflict(Exception):
     pass
 
 
-def rebase(commit: Commit, parent: Commit) -> Commit:
-    if commit.parent() == parent:
+def rebase(commit: Commit, new_parent: Optional[Commit]) -> Commit:
+    repo = commit.repo
+
+    orig_parent = commit.parent() if not commit.is_root else None
+
+    if orig_parent == new_parent:
         return commit  # No need to do anything
+
+    def get_summary(cmt: Optional[Commit]) -> str:
+        return cmt.summary() if cmt is not None else "<root>"
+
+    def get_tree(cmt: Optional[Commit]) -> Tree:
+        return cmt.tree() if cmt is not None else Tree(repo, b"")
 
     tree = merge_trees(
         Path("/"),
-        (parent.summary(), commit.parent().summary(), commit.summary()),
-        parent.tree(),
-        commit.parent().tree(),
-        commit.tree(),
+        (get_summary(new_parent), get_summary(orig_parent), get_summary(commit)),
+        get_tree(new_parent),
+        get_tree(orig_parent),
+        get_tree(commit),
     )
+
+    new_parents = [new_parent] if new_parent is not None else []
+
     # NOTE: This omits commit.committer to pull it from the environment. This
     # means that created commits may vary between invocations, but due to
     # caching, should be consistent within a single process.
-    return tree.repo.new_commit(tree, [parent], commit.message, commit.author)
+    return commit.update(tree=tree, parents=new_parents)
 
 
 def conflict_prompt(
@@ -56,7 +69,7 @@ def conflict_prompt(
 ) -> T:
     print(f"{descr} conflict for '{path}'")
     print(f"  (1) {labels[0]}: {current_descr}")
-    print(f"  (2) {labels[1]}: {other_descr}")
+    print(f"  (2) {labels[2]}: {other_descr}")
     char = input("Resolution or (A)bort? ")
     if char == "1":
         return current
@@ -119,7 +132,15 @@ def merge_entries(
         elif base and base.mode == other.mode:
             mode = current.mode
         else:
-            mode = Mode.EXEC  # XXX: gross
+            mode = conflict_prompt(
+                path,
+                "File mode",
+                labels,
+                current.mode,
+                str(current.mode),
+                other.mode,
+                str(other.mode),
+            )
     else:
         return conflict_prompt(
             path,

@@ -1,6 +1,5 @@
 # pylint: skip-file
 
-import textwrap
 import pytest
 from conftest import *
 
@@ -66,6 +65,65 @@ def test_interactive_reorder(repo):
 def test_interactive_reorder_subdir(repo):
     bash("mkdir subdir")
     interactive_reorder_helper(repo, cwd=repo.workdir / "subdir")
+
+
+def test_interactive_on_root(repo):
+    bash(
+        """
+        echo "hello, world" > file1
+        git add file1
+        git commit -m "commit one"
+
+        echo "second file" > file2
+        git add file2
+        git commit -m "commit two"
+
+        echo "new line!" >> file1
+        git add file1
+        git commit -m "commit three"
+        """
+    )
+
+    orig_commit3 = prev = repo.get_commit("HEAD")
+    orig_commit2 = prev_u = prev.parent()
+    orig_commit1 = prev_u.parent()
+
+    index_tree = repo.index.tree()
+
+    with editor_main(["-i", "--root"]) as ed:
+        with ed.next_file() as f:
+            assert f.startswith_dedent(
+                f"""\
+                pick {prev.parent().parent().oid.short()} commit one
+                pick {prev.parent().oid.short()} commit two
+                pick {prev.oid.short()} commit three
+                """
+            )
+            f.replace_dedent(
+                f"""\
+                pick {prev.parent().oid.short()} commit two
+                pick {prev.parent().parent().oid.short()} commit one
+                pick {prev.oid.short()} commit three
+                """
+            )
+
+    new_commit3 = curr = repo.get_commit("HEAD")
+    new_commit1 = curr_u = curr.parent()
+    new_commit2 = curr_u.parent()
+
+    assert curr != prev
+    assert curr.tree() == index_tree
+    assert new_commit1.message == orig_commit1.message
+    assert new_commit2.message == orig_commit2.message
+    assert new_commit3.message == orig_commit3.message
+
+    assert new_commit2.is_root
+    assert new_commit1.parent() == new_commit2
+    assert new_commit3.parent() == new_commit1
+
+    assert new_commit1.tree().entries[b"file1"] == orig_commit1.tree().entries[b"file1"]
+    assert new_commit2.tree().entries[b"file2"] == orig_commit2.tree().entries[b"file2"]
+    assert new_commit3.tree() == orig_commit3.tree()
 
 
 def test_interactive_fixup(repo):

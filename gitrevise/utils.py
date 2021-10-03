@@ -14,12 +14,14 @@ class EditorError(Exception):
     pass
 
 
-def commit_range(base: Commit, tip: Commit) -> List[Commit]:
+def commit_range(base: Optional[Commit], tip: Commit) -> List[Commit]:
     """Oldest-first iterator over the given commit range,
     not including the commit ``base``"""
     commits = []
     while tip != base:
         commits.append(tip)
+        if tip.is_root and base is None:
+            break
         tip = tip.parent()
     commits.reverse()
     return commits
@@ -224,10 +226,10 @@ def edit_commit_message(commit: Commit) -> Commit:
         "with '#' will be ignored, and an empty message aborts the commit.\n"
     )
 
-    # If the target commit is not the initial commit, produce a diff --stat to
+    # If the target commit is not a merge commit, produce a diff --stat to
     # include in the commit message comments.
-    if len(commit.parents()) == 1:
-        tree_a = commit.parent().tree().persist().hex()
+    if len(commit.parents()) < 2:
+        tree_a = commit.parent_tree().persist().hex()
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
 
@@ -261,7 +263,7 @@ def cut_commit(commit: Commit) -> Commit:
     print(f"Cutting commit {commit.oid.short()}")
     print("Select changes to be included in part [1]:")
 
-    base_tree = commit.parent().tree()
+    base_tree = commit.parent_tree()
     final_tree = commit.tree()
 
     # Create an environment with an explicit index file and the base tree.

@@ -30,6 +30,12 @@ def basic_repo(repo):
 
 
 def fixup_helper(repo, flags, target, message=None):
+    with fixup_helper_editor(repo=repo, flags=flags, target=target, message=message):
+        pass
+
+
+@contextmanager
+def fixup_helper_editor(repo, flags, target, message=None):
     old = repo.get_commit(target)
     assert old.persisted
 
@@ -40,7 +46,8 @@ def fixup_helper(repo, flags, target, message=None):
         """
     )
 
-    main(flags + [target])
+    with editor_main(flags + [target]) as ed:
+        yield ed
 
     new = repo.get_commit(target)
     assert old != new, "commit was modified"
@@ -88,7 +95,7 @@ def test_fixup_head_editor(basic_repo):
     old = basic_repo.get_commit("HEAD")
     newmsg = "fixup_head_editor test\n\nanother line\n"
 
-    with Editor() as ed, in_parallel(fixup_helper, basic_repo, ["-e"], "HEAD", newmsg):
+    with fixup_helper_editor(basic_repo, ["-e"], "HEAD", newmsg) as ed:
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
@@ -98,7 +105,7 @@ def test_fixup_nonhead_editor(basic_repo):
     old = basic_repo.get_commit("HEAD~")
     newmsg = "fixup_nonhead_editor test\n\nanother line\n"
 
-    with Editor() as ed, in_parallel(fixup_helper, basic_repo, ["-e"], "HEAD~", newmsg):
+    with fixup_helper_editor(basic_repo, ["-e"], "HEAD~", newmsg) as ed:
         with ed.next_file() as f:
             assert f.startswith(old.message)
             f.replace_dedent(newmsg)
