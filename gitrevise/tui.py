@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, List
 from argparse import ArgumentParser, Namespace
-from subprocess import DEVNULL, CalledProcessError
+from subprocess import CalledProcessError
 import sys
 
 from .odb import Repository, Commit, Reference
@@ -227,10 +227,11 @@ def noninteractive(
 
 def inner_main(args: Namespace, repo: Repository) -> None:
     # If '-a' or '-p' was specified, stage changes.
+    # Note that stdout=None means "inherit current stdout".
     if args.all:
-        repo.git("add", "-u", stdout=DEVNULL)
+        repo.git("add", "-u", stdout=None)
     if args.patch:
-        repo.git("add", "-p", stdout=DEVNULL)
+        repo.git("add", "-p", stdout=None)
 
     if args.gpg_sign:
         repo.sign_commits = True
