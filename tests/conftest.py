@@ -67,6 +67,21 @@ def short_tmpdir():
         yield py.path.local(tdir)
 
 
+@pytest.fixture
+def gpg(short_tmpdir, monkeypatch):
+    # On MacOS, pytest's temp paths are too long for gpg-agent.
+    # See https://github.com/pytest-dev/pytest/issues/5802
+    gnupghome = short_tmpdir
+    monkeypatch.setenv("GNUPGHOME", str(gnupghome))
+    gnupghome.chmod(0o700)
+    (gnupghome / "gpg.conf").write("pinentry-mode loopback")
+
+    try:
+        yield
+    finally:
+        bash("gpgconf --kill all")
+
+
 @contextmanager
 def in_parallel(func, *args, **kwargs):
     class HelperThread(Thread):

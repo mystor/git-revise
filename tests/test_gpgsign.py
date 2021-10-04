@@ -4,16 +4,10 @@ from conftest import *
 from subprocess import CalledProcessError, run
 
 
-def test_gpgsign(repo, short_tmpdir, monkeypatch):
+def test_gpgsign(repo, gpg, monkeypatch):
     bash("git commit --allow-empty -m 'commit 1'")
     assert repo.get_commit("HEAD").gpgsig is None
 
-    # On MacOS, pytest's temp paths are too long for gpg-agent.
-    # See https://github.com/pytest-dev/pytest/issues/5802
-    gnupghome = short_tmpdir
-    monkeypatch.setenv("GNUPGHOME", str(gnupghome))
-    gnupghome.chmod(0o700)
-    (gnupghome / "gpg.conf").write("pinentry-mode loopback")
     user_ident = repo.default_author.signing_key
     run(
         ["gpg", "--batch", "--passphrase", "", "--quick-gen-key", user_ident],
