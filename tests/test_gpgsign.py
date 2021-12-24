@@ -26,7 +26,7 @@ def test_gpgsign(repo, short_tmpdir, monkeypatch):
         monkeypatch.setenv("GNUPGHOME", str(gnupghome))
 
     gnupghome.chmod(0o700)
-    (gnupghome / "gpg.conf").write("pinentry-mode loopback")
+    (gnupghome / "gpg.conf").write_text("pinentry-mode loopback")
     user_ident = repo.default_author.signing_key
     sh_run(
         ["gpg", "--batch", "--passphrase", "", "--quick-gen-key", user_ident],
