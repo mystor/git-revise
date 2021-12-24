@@ -10,6 +10,7 @@ import textwrap
 import subprocess
 import traceback
 from gitrevise.odb import Repository
+from gitrevise.utils import sh_path
 from contextlib import contextmanager
 from threading import Thread, Event
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -21,6 +22,8 @@ def hermetic_seal(tmp_path_factory, monkeypatch):
     # Lock down user git configuration
     home = tmp_path_factory.mktemp("home")
     xdg_config_home = home / ".config"
+    if os.name == "nt":
+        monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "true")
@@ -100,7 +103,7 @@ def bash(command):
         GIT_COMMITTER_NAME="Bash Committer",
         GIT_COMMITTER_EMAIL="bash_committer@example.com",
     )
-    subprocess.run(["bash", "-ec", textwrap.dedent(command)], check=True, env=env)
+    subprocess.run([sh_path(), "-ec", textwrap.dedent(command)], check=True, env=env)
 
 
 def changeline(path, lineno, newline):

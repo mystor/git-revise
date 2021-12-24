@@ -1,9 +1,10 @@
-from typing import List, Optional, Tuple
-from subprocess import run, CalledProcessError
+from __future__ import annotations
+
+from typing import Any, List, Optional, Sequence, Tuple
+from subprocess import CompletedProcess, run, CalledProcessError
 from pathlib import Path
 import textwrap
 import sys
-import shlex
 import os
 import re
 
@@ -61,15 +62,7 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
 
 def edit_file_with_editor(editor: str, path: Path) -> bytes:
     try:
-        if os.name == "nt":
-            # The popular "Git for Windows" distribution uses a bundled msys
-            # bash executable which is generally used to invoke GIT_EDITOR.
-            # Unfortunately, there doesn't appear to be a way to find this
-            # executable as a python subcommand. Instead, attempt to parse the
-            # editor string ourselves. (#19)
-            cmd = shlex.split(editor, posix=True) + [path.name]
-        else:
-            cmd = ["sh", "-c", f'{editor} "$@"', editor, path.name]
+        cmd = [sh_path(), "-ec", f'{editor} "$@"', editor, path.name]
         run(cmd, check=True, cwd=path.parent)
     except CalledProcessError as err:
         raise EditorError(f"Editor exited with status {err}") from err
@@ -299,3 +292,26 @@ def cut_commit(commit: Commit) -> Commit:
     part2 = edit_commit_message(part2)
 
     return part2
+
+
+def sh_path() -> str:
+    if os.name == "nt":
+        # On Windows, git is installed using Git for Windows, which installs
+        # into the "Git" directory in "%ProgramFiles%". Use the `sh.exe` file
+        # from that directory to perform shell operations, so they're executed
+        # in the expected environment.
+        return os.path.join(os.environ["PROGRAMFILES"], "Git", "bin", "sh.exe")
+    return "/bin/sh"
+
+
+def sh_run(
+    cmd: Sequence[Any],
+    *args: Any,
+    **kwargs: Any,
+) -> CompletedProcess[Any]:
+    """Run a command within git's shell environment. This is the same as
+    subprocess.run on most platforms, but will enter the git-bash mingw
+    environment on Windows."""
+    if os.name == "nt":
+        cmd = (sh_path(), "-ec", 'exec "$0" "$@"', *cmd)
+    return run(cmd, *args, **kwargs)  # pylint: disable=subprocess-run-check

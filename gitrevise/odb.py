@@ -317,6 +317,8 @@ class Repository:
 
     def sign_buffer(self, buffer: bytes) -> bytes:
         """Return the text of the signed commit object."""
+        from .utils import sh_run  # pylint: disable=import-outside-toplevel
+
         if not self.sign_commits:
             return b""
 
@@ -325,7 +327,7 @@ class Repository:
         )
         gpg = None
         try:
-            gpg = run(
+            gpg = sh_run(
                 (self.gpg, "--status-fd=2", "-bsau", key_id),
                 stdout=PIPE,
                 stderr=PIPE,
