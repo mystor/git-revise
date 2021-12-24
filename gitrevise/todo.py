@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from enum import Enum
 from typing import List, Optional
@@ -18,7 +20,7 @@ class StepKind(Enum):
         return str(self.value)
 
     @staticmethod
-    def parse(instr: str) -> "StepKind":
+    def parse(instr: str) -> StepKind:
         if "pick".startswith(instr):
             return StepKind.PICK
         if "fixup".startswith(instr):
@@ -47,7 +49,7 @@ class Step:
         self.message = None
 
     @staticmethod
-    def parse(repo: Repository, instr: str) -> "Step":
+    def parse(repo: Repository, instr: str) -> Step:
         parsed = re.match(r"(?P<command>\S+)\s+(?P<hash>\S+)", instr)
         if not parsed:
             raise ValueError(

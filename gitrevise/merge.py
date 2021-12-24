@@ -10,6 +10,8 @@ files and generate. This algorithm, on the other hand, avoids looking at
 unmodified trees and blobs when possible.
 """
 
+from __future__ import annotations
+
 from typing import Iterator, Optional, Tuple, TypeVar
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -365,7 +367,7 @@ class ConflictParseFailed(Exception):
 
 def normalize_conflict(
     lines: Iterator[bytes],
-    hasher: Optional["hashlib._Hash"],
+    hasher: Optional[hashlib._Hash],
 ) -> bytes:
     cur_hunk: Optional[bytes] = b""
     other_hunk: Optional[bytes] = None
