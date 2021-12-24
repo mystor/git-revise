@@ -2,6 +2,8 @@
 Helper classes for reading cached objects from Git's Object Database.
 """
 
+from __future__ import annotations
+
 import hashlib
 import re
 import os
@@ -48,18 +50,18 @@ class Oid(bytes):
 
     __slots__ = ()
 
-    def __new__(cls, b: bytes) -> "Oid":
+    def __new__(cls, b: bytes) -> Oid:
         if len(b) != 20:
             raise ValueError("Expected 160-bit SHA1 hash")
         return super().__new__(cls, b)  # type: ignore
 
     @classmethod
-    def fromhex(cls, instr: str) -> "Oid":
+    def fromhex(cls, instr: str) -> Oid:
         """Parse an ``Oid`` from a hexadecimal string"""
         return Oid(bytes.fromhex(instr))
 
     @classmethod
-    def null(cls) -> "Oid":
+    def null(cls) -> Oid:
         """An ``Oid`` consisting of entirely 0s"""
         return cls(b"\0" * 20)
 
@@ -68,7 +70,7 @@ class Oid(bytes):
         return str(self)[:12]
 
     @classmethod
-    def for_object(cls, tag: str, body: bytes) -> "Oid":
+    def for_object(cls, tag: str, body: bytes) -> Oid:
         """Hash an object with the given type tag and body to determine its Oid"""
         hasher = hashlib.sha1()
         hasher.update(tag.encode() + b" " + str(len(body)).encode() + b"\0" + body)
@@ -149,7 +151,7 @@ class Repository:
     default_committer: Signature
     """committer used by default for new commits"""
 
-    index: "Index"
+    index: Index
     """current index state"""
 
     sign_commits: bool
@@ -158,7 +160,7 @@ class Repository:
     gpg: bytes
     """path to GnuPG binary"""
 
-    _objects: Dict[int, Dict[Oid, "GitObj"]]
+    _objects: Dict[int, Dict[Oid, GitObj]]
     _catfile: Popen
     _tempdir: Optional[TemporaryDirectory]
 
@@ -257,7 +259,7 @@ class Repository:
         except CalledProcessError:
             return default
 
-    def __enter__(self) -> "Repository":
+    def __enter__(self) -> Repository:
         return self
 
     def __exit__(
@@ -287,12 +289,12 @@ class Repository:
 
     def new_commit(
         self,
-        tree: "Tree",
-        parents: Sequence["Commit"],
+        tree: Tree,
+        parents: Sequence[Commit],
         message: bytes,
         author: Optional[Signature] = None,
         committer: Optional[Signature] = None,
-    ) -> "Commit":
+    ) -> Commit:
         """Directly create an in-memory commit object, without persisting it.
         If a commit object with these properties already exists, it will be
         returned instead."""
@@ -343,7 +345,7 @@ class Repository:
             signature += b" " + line + b"\n"
         return signature
 
-    def new_tree(self, entries: Mapping[bytes, "Entry"]) -> "Tree":
+    def new_tree(self, entries: Mapping[bytes, Entry]) -> Tree:
         """Directly create an in-memory tree object, without persisting it.
         If a tree object with these entries already exists, it will be
         returned instead."""
@@ -361,7 +363,7 @@ class Repository:
             body += cast(bytes, entry.mode.value) + b" " + name + b"\0" + entry.oid
         return Tree(self, body)
 
-    def get_obj(self, ref: Union[Oid, str]) -> "GitObj":
+    def get_obj(self, ref: Union[Oid, str]) -> GitObj:
         """Get the identified git object from this repository. If given an
         :class:`Oid`, the cache will be checked before asking git."""
         if isinstance(ref, Oid):
@@ -414,40 +416,40 @@ class Repository:
         assert obj.oid == oid, "miscomputed oid"
         return obj
 
-    def get_commit(self, ref: Union[Oid, str]) -> "Commit":
+    def get_commit(self, ref: Union[Oid, str]) -> Commit:
         """Like :py:meth:`get_obj`, but returns a :class:`Commit`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Commit):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Commit!")
 
-    def get_tree(self, ref: Union[Oid, str]) -> "Tree":
+    def get_tree(self, ref: Union[Oid, str]) -> Tree:
         """Like :py:meth:`get_obj`, but returns a :class:`Tree`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Tree):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Tree!")
 
-    def get_blob(self, ref: Union[Oid, str]) -> "Blob":
+    def get_blob(self, ref: Union[Oid, str]) -> Blob:
         """Like :py:meth:`get_obj`, but returns a :class:`Blob`"""
         obj = self.get_obj(ref)
         if isinstance(obj, Blob):
             return obj
         raise ValueError(f"{type(obj).__name__} {ref} is not a Blob!")
 
-    def get_obj_ref(self, ref: str) -> "Reference[GitObj]":
+    def get_obj_ref(self, ref: str) -> Reference[GitObj]:
         """Get a :class:`Reference` to a :class:`GitObj`"""
         return Reference(GitObj, self, ref)
 
-    def get_commit_ref(self, ref: str) -> "Reference[Commit]":
+    def get_commit_ref(self, ref: str) -> Reference[Commit]:
         """Get a :class:`Reference` to a :class:`Commit`"""
         return Reference(Commit, self, ref)
 
-    def get_tree_ref(self, ref: str) -> "Reference[Tree]":
+    def get_tree_ref(self, ref: str) -> Reference[Tree]:
         """Get a :class:`Reference` to a :class:`Tree`"""
         return Reference(Tree, self, ref)
 
-    def get_blob_ref(self, ref: str) -> "Reference[Blob]":
+    def get_blob_ref(self, ref: str) -> Reference[Blob]:
         """Get a :class:`Reference` to a :class:`Blob`"""
         return Reference(Blob, self, ref)
 
@@ -573,11 +575,11 @@ class Commit(GitObj):
             elif key == b"gpgsig":
                 self.gpgsig = value
 
-    def tree(self) -> "Tree":
+    def tree(self) -> Tree:
         """``tree`` object corresponding to this commit"""
         return self.repo.get_tree(self.tree_oid)
 
-    def parent_tree(self) -> "Tree":
+    def parent_tree(self) -> Tree:
         """``tree`` object corresponding to the first parent of this commit,
         or the null tree if this is a root commit"""
         if self.is_root:
@@ -589,11 +591,11 @@ class Commit(GitObj):
         """Whether this commit has no parents"""
         return not self.parent_oids
 
-    def parents(self) -> Sequence["Commit"]:
+    def parents(self) -> Sequence[Commit]:
         """List of parent commits"""
         return [self.repo.get_commit(parent) for parent in self.parent_oids]
 
-    def parent(self) -> "Commit":
+    def parent(self) -> Commit:
         """Helper method to get the single parent of a commit. Raises
         :class:`ValueError` if the incorrect number of parents are
         present."""
@@ -609,7 +611,7 @@ class Commit(GitObj):
         )
         return " ".join(summary_paragraph.splitlines())
 
-    def rebase(self, parent: Optional["Commit"]) -> "Commit":
+    def rebase(self, parent: Optional[Commit]) -> Commit:
         """Create a new commit with the same changes, except with ``parent``
         as its parent. If ``parent`` is ``None``, this becomes a root commit."""
         from .merge import rebase  # pylint: disable=import-outside-toplevel
@@ -618,12 +620,12 @@ class Commit(GitObj):
 
     def update(
         self,
-        tree: Optional["Tree"] = None,
-        parents: Optional[Sequence["Commit"]] = None,
+        tree: Optional[Tree] = None,
+        parents: Optional[Sequence[Commit]] = None,
         message: Optional[bytes] = None,
         author: Optional[Signature] = None,
         recommit: bool = False,
-    ) -> "Commit":
+    ) -> Commit:
         """Create a new commit with specific properties updated or replaced"""
         # Compute parameters used to create the new object.
         if tree is None:
@@ -683,7 +685,7 @@ class Mode(Enum):
     def is_file(self) -> bool:
         return self in (Mode.REGULAR, Mode.EXEC)
 
-    def comparable_to(self, other: "Mode") -> bool:
+    def comparable_to(self, other: Mode) -> bool:
         return self == other or (self.is_file() and other.is_file())
 
 
@@ -706,7 +708,7 @@ class Entry:
         self.mode = mode
         self.oid = oid
 
-    def blob(self) -> "Blob":
+    def blob(self) -> Blob:
         """Get the data for this entry as a :class:`Blob`"""
         if self.mode in (Mode.REGULAR, Mode.EXEC):
             return self.repo.get_blob(self.oid)
@@ -718,7 +720,7 @@ class Entry:
             return self.repo.get_blob(self.oid).body
         return b"<non-symlink>"
 
-    def tree(self) -> "Tree":
+    def tree(self) -> Tree:
         """Get the data for this entry as a :class:`Tree`"""
         if self.mode == Mode.DIR:
             return self.repo.get_tree(self.oid)
@@ -760,7 +762,7 @@ class Tree(GitObj):
         for entry in self.entries.values():
             entry.persist()
 
-    def to_index(self, path: Path, skip_worktree: bool = False) -> "Index":
+    def to_index(self, path: Path, skip_worktree: bool = False) -> Index:
         """Read tree into a temporary index. If skip_workdir is ``True``, every
         entry in the index will have its "Skip Workdir" bit set."""
 
