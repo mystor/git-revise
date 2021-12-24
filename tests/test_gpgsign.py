@@ -1,7 +1,8 @@
 # pylint: skip-file
 
 from conftest import *
-from subprocess import CalledProcessError, run
+from subprocess import CalledProcessError
+from gitrevise.utils import sh_run
 
 
 def test_gpgsign(repo, short_tmpdir, monkeypatch):
@@ -11,11 +12,23 @@ def test_gpgsign(repo, short_tmpdir, monkeypatch):
     # On MacOS, pytest's temp paths are too long for gpg-agent.
     # See https://github.com/pytest-dev/pytest/issues/5802
     gnupghome = short_tmpdir
-    monkeypatch.setenv("GNUPGHOME", str(gnupghome))
+
+    # On windows, convert the path to git-bash's unix format before writing it
+    # into the environment, as the gpg binary reading it is run under mingw.
+    if os.name == "nt":
+        proc = sh_run(
+            ["cygpath", "-u", str(gnupghome)],
+            capture_output=True,
+            check=True,
+        )
+        monkeypatch.setenv("GNUPGHOME", proc.stdout.decode().strip())
+    else:
+        monkeypatch.setenv("GNUPGHOME", str(gnupghome))
+
     gnupghome.chmod(0o700)
     (gnupghome / "gpg.conf").write("pinentry-mode loopback")
     user_ident = repo.default_author.signing_key
-    run(
+    sh_run(
         ["gpg", "--batch", "--passphrase", "", "--quick-gen-key", user_ident],
         check=True,
     )
