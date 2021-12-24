@@ -132,7 +132,19 @@ def editor_main(args, **kwargs):
         )
         m.setenv("GIT_EDITOR", editor_cmd)
 
-        with in_parallel(main, args, **kwargs):
+        def main_wrapper():
+            try:
+                return main(args, **kwargs)
+            except Exception as e:
+                ed.exception = e
+            finally:
+                if not ed.exception:
+                    ed.exception = Exception(
+                        "git-revise exited without invoking editor"
+                    )
+                ed.request_ready.set()
+
+        with in_parallel(main_wrapper):
             yield ed
 
 
@@ -141,6 +153,7 @@ class EditorFile(BaseHTTPRequestHandler):
         self.response_ready = Event()
         self.indata = None
         self.outdata = None
+        self.exception = None
         super().__init__(*args, **kwargs)
 
     def do_POST(self):
@@ -212,6 +225,7 @@ class Editor(HTTPServer):
         self.request_ready = Event()
         self.handle_thread = None
         self.current = None
+        self.exception = None
         self.timeout = 10
 
     def next_file(self):
@@ -224,6 +238,9 @@ class Editor(HTTPServer):
         self.handle_thread.start()
         if not self.request_ready.wait(timeout=self.timeout):
             raise Exception("timeout while waiting for request")
+
+        if self.exception:
+            raise self.exception
 
         # Return the request we received and were notified about.
         assert self.current
