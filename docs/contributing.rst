@@ -10,9 +10,14 @@ checking, :command:`pylint` for linting, :command:`pytest` for testing, and
 
 .. code-block:: shell
 
-  $ tox          # All python versions
-  $ tox -e py36  # Python 3.6
-  $ tox -e py37  # Python 3.7
+  $ tox           # All python versions
+  $ tox -e py38   # Python 3.8
+  $ tox -e py39   # Python 3.9
+  $ tox -e py310  # Python 3.10
+  
+  $ tox -e mypy   # Mypy Typechecking
+  $ tox -e pylint # Linting
+  $ tox -e black  # Check Formatting
 
 Code Formatting
 ---------------

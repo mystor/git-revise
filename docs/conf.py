@@ -22,7 +22,7 @@ import gitrevise
 # -- Project information -----------------------------------------------------
 
 project = "git-revise"
-copyright = "2018-2019, Nika Layzell"
+copyright = "2018-2022, Nika Layzell"
 author = "Nika Layzell <nika@thelayzells.com>"
 
 # The short X.Y version

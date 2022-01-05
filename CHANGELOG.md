@@ -1,6 +1,6 @@
 # Changelog
 
-## vNEXT
+## v0.7.0
 
 * Add support for `git-rerere`, to record and replay conflict resolutions (#75)
 * Fix autosquash order of multiple fixup commits with the same target (#72)
@@ -8,6 +8,7 @@
 * Fix handling of multiline commit subjects (#86)
 * Add support for interactively revising or autosquashing the root commit via `--root`
 * Add support for `commit.gpgSign` (#46)
+* Improved support for git-for-windows (#112)
 
 ## v0.6.0
 

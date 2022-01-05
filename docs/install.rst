@@ -1,7 +1,7 @@
 Installing
 ==========
 
-:command:`git-revise` can be installed from PyPi_. Python 3.6 or higher is
+:command:`git-revise` can be installed from PyPi_. Python 3.8 or higher is
 required.
 
 .. code-block:: bash
