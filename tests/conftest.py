@@ -3,12 +3,12 @@
 import pytest
 import shlex
 import os
-import py.path
 import sys
 import tempfile
 import textwrap
 import subprocess
 import traceback
+from pathlib import Path
 from gitrevise.odb import Repository
 from contextlib import contextmanager
 from threading import Thread, Event
@@ -64,7 +64,22 @@ def repo(hermetic_seal):
 @pytest.fixture
 def short_tmpdir():
     with tempfile.TemporaryDirectory() as tdir:
-        yield py.path.local(tdir)
+        yield Path(tdir)
+
+
+@pytest.fixture
+def gpg(short_tmpdir, monkeypatch):
+    # On MacOS, pytest's temp paths are too long for gpg-agent.
+    # See https://github.com/pytest-dev/pytest/issues/5802
+    gnupghome = short_tmpdir
+    monkeypatch.setenv("GNUPGHOME", str(gnupghome))
+    gnupghome.chmod(0o700)
+    (gnupghome / "gpg.conf").write_text("pinentry-mode loopback")
+
+    try:
+        yield
+    finally:
+        bash("gpgconf --kill all")
 
 
 @contextmanager
