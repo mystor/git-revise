@@ -64,7 +64,7 @@ def edit_file_with_editor(editor: str, path: Path) -> bytes:
         if os.name == "nt":
             # The popular "Git for Windows" distribution uses a bundled msys
             # bash executable which is generally used to invoke GIT_EDITOR.
-            # Unfortunatly, there doesn't appear to be a way to find this
+            # Unfortunately, there doesn't appear to be a way to find this
             # executable as a python subcommand. Instead, attempt to parse the
             # editor string ourselves. (#19)
             cmd = shlex.split(editor, posix=True) + [path.name]
