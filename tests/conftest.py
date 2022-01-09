@@ -3,12 +3,12 @@
 import pytest
 import shlex
 import os
-import py.path
 import sys
 import tempfile
 import textwrap
 import subprocess
 import traceback
+from pathlib import Path
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_path
 from contextlib import contextmanager
@@ -67,7 +67,7 @@ def repo(hermetic_seal):
 @pytest.fixture
 def short_tmpdir():
     with tempfile.TemporaryDirectory() as tdir:
-        yield py.path.local(tdir)
+        yield Path(tdir)
 
 
 @contextmanager
