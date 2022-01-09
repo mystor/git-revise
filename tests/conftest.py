@@ -138,13 +138,13 @@ def editor_main(
 ):
     # pylint: disable=invalid-name
     with pytest.MonkeyPatch().context() as m, Editor() as ed:
+        host, port = ed.server_address
         editor_cmd = " ".join(
             shlex.quote(p)
             for p in (
                 sys.executable,
                 dummy_editor.__file__,
-                # pylint: disable=consider-using-f-string
-                "http://{0}:{1}/".format(*ed.server_address[:2]),
+                f"http://{host}:{port}/",
             )
         )
         m.setenv("GIT_EDITOR", editor_cmd)
