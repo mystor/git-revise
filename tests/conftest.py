@@ -149,12 +149,12 @@ def editor_main(
         )
         m.setenv("GIT_EDITOR", editor_cmd)
 
-        # pylint: disable=inconsistent-return-statements
         def main_wrapper():
             try:
                 return main(args, cwd=cwd, input=input)
             except Exception as e:  # pylint: disable=broad-except
                 ed.exception = e
+                return None
             finally:
                 if not ed.exception:
                     ed.exception = Exception(
