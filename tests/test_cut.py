@@ -3,7 +3,7 @@
 from conftest import *
 
 
-def test_cut(repo):
+def test_cut(repo: Repository) -> None:
     bash(
         """
         echo "Hello, World" >> file1
@@ -46,7 +46,7 @@ def test_cut(repo):
     assert new_uu == prev_uu
 
 
-def test_cut_root(repo):
+def test_cut_root(repo: Repository) -> None:
     bash(
         """
         echo "Hello, World" >> file1

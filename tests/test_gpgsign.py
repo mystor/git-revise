@@ -5,7 +5,11 @@ from subprocess import CalledProcessError
 from gitrevise.utils import sh_run
 
 
-def test_gpgsign(repo, short_tmpdir, monkeypatch):
+def test_gpgsign(
+    repo: Repository,
+    short_tmpdir: py.path.local,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bash("git commit --allow-empty -m 'commit 1'")
     assert repo.get_commit("HEAD").gpgsig is None
 
