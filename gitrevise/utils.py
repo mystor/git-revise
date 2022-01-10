@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple
-from subprocess import CompletedProcess, run, CalledProcessError
+from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from subprocess import run, CalledProcessError
 from pathlib import Path
 import textwrap
 import sys
@@ -9,6 +9,10 @@ import os
 import re
 
 from .odb import Repository, Commit, Tree, Oid, Reference
+
+
+if TYPE_CHECKING:
+    from subprocess import CompletedProcess
 
 
 class EditorError(Exception):
@@ -308,7 +312,7 @@ def sh_run(
     cmd: Sequence[Any],
     *args: Any,
     **kwargs: Any,
-) -> CompletedProcess[Any]:
+) -> "CompletedProcess[Any]":
     """Run a command within git's shell environment. This is the same as
     subprocess.run on most platforms, but will enter the git-bash mingw
     environment on Windows."""

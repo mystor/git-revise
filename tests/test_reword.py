@@ -1,7 +1,9 @@
-# pylint: skip-file
+# pylint: disable=not-context-manager
 
 import textwrap
-from conftest import *
+import pytest
+from gitrevise.odb import Repository
+from .conftest import bash, main, editor_main
 
 
 @pytest.mark.parametrize("target", ["HEAD", "HEAD~", "HEAD~~"])

@@ -1,14 +1,15 @@
-# pylint: skip-file
-
-import pytest
-import shlex
 import os
-import py.path
+import shlex
+import subprocess
 import sys
 import tempfile
 import textwrap
-import subprocess
 import traceback
+
+from contextlib import contextmanager
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+from threading import Thread, Event
 from types import TracebackType
 from typing import (
     Any,
@@ -21,20 +22,20 @@ from typing import (
     Union,
     TYPE_CHECKING,
 )
+
+import pytest
+
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_path
-from contextlib import contextmanager
-from threading import Thread, Event
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import dummy_editor
+from . import dummy_editor
 
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
 
-@pytest.fixture(autouse=True)
-def hermetic_seal(
+@pytest.fixture(name="hermetic_seal", autouse=True)
+def fixture_hermetic_seal(
     tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -77,16 +78,17 @@ def hermetic_seal(
     bash("git init -q")
 
 
-@pytest.fixture
-def repo(hermetic_seal: None) -> Generator[Repository, None, None]:
+@pytest.fixture(name="repo")
+# pylint: disable=unused-argument
+def fixture_repo(hermetic_seal: None) -> Generator[Repository, None, None]:
     with Repository() as repo:
         yield repo
 
 
-@pytest.fixture
-def short_tmpdir() -> Generator[py.path.local, None, None]:
+@pytest.fixture(name="short_tmpdir")
+def fixture_short_tmpdir() -> Generator[Path, None, None]:
     with tempfile.TemporaryDirectory() as tdir:
-        yield py.path.local(tdir)
+        yield Path(tdir)
 
 
 @contextmanager
@@ -141,6 +143,7 @@ def changeline(path: "StrPath", lineno: int, newline: bytes) -> None:
 def main(
     args: Sequence[str],
     cwd: Optional["StrPath"] = None,
+    # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
     check: bool = True,
 ) -> "subprocess.CompletedProcess[bytes]":
@@ -153,23 +156,25 @@ def main(
 def editor_main(
     args: Sequence[str],
     cwd: Optional["StrPath"] = None,
+    # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
 ) -> "Generator[Editor, None, None]":
-    with pytest.MonkeyPatch().context() as m, Editor() as ed:
+    with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed:
+        host, port = ed.server_address
         editor_cmd = " ".join(
             shlex.quote(p)
             for p in (
                 sys.executable,
                 dummy_editor.__file__,
-                "http://{0}:{1}/".format(*ed.server_address[:2]),
+                f"http://{host}:{port}/",
             )
         )
-        m.setenv("GIT_EDITOR", editor_cmd)
+        monkeypatch.setenv("GIT_EDITOR", editor_cmd)
 
         def main_wrapper() -> Optional["subprocess.CompletedProcess[bytes]"]:
             try:
                 return main(args, cwd=cwd, input=input)
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 ed.exception = e
                 return None
             finally:
@@ -200,6 +205,7 @@ class EditorFile(BaseHTTPRequestHandler):
         self.exception = None
         super().__init__(request=request, client_address=client_address, server=server)
 
+    # pylint: disable=invalid-name
     def do_POST(self) -> None:
         length = int(self.headers.get("content-length"))
         self.indata = self.rfile.read(length)
@@ -247,6 +253,10 @@ class EditorFile(BaseHTTPRequestHandler):
             text = textwrap.dedent(text).encode()
         self.outdata = text
 
+    # pylint does not recognize these, for some reason, complaining:
+    # E1129: Context manager 'NoneType' doesn't implement __enter__ and
+    # __exit__. (not-context-manager) I suspect it gets looped up when tracing
+    # types due to the mutual touching between it and Editor.
     def __enter__(self) -> "EditorFile":
         return self
 
@@ -263,7 +273,7 @@ class EditorFile(BaseHTTPRequestHandler):
             exc = "".join(traceback.format_exception(etype, evalue, tb)).encode()
             try:
                 self.send_editor_reply(500, exc)
-            except:
+            except:  # pylint: disable=bare-except
                 pass
 
     def __repr__(self) -> str:
@@ -310,6 +320,8 @@ class Editor(HTTPServer):
     def __enter__(self) -> "Editor":
         return self
 
+    # The super class just defines this as *args.
+    # pylint: disable=arguments-differ
     def __exit__(
         self,
         etype: Optional[Type[BaseException]],
@@ -324,3 +336,12 @@ class Editor(HTTPServer):
             self.server_close()
             if self.current:
                 self.current.send_editor_reply(500, b"editor server was shut down")
+
+
+__all__ = (
+    "bash",
+    "changeline",
+    "editor_main",
+    "main",
+    "Editor",
+)

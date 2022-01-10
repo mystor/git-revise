@@ -1,13 +1,21 @@
-# pylint: skip-file
+# pylint: disable=not-context-manager
 
-from conftest import *
+import os
+from contextlib import contextmanager
+from typing import (
+    Generator,
+    Optional,
+    Sequence,
+)
+import pytest
+from gitrevise.odb import Repository
 from gitrevise.utils import commit_range
 from gitrevise.todo import StepKind, build_todos, autosquash_todos
-import os
+from .conftest import bash, main, editor_main, Editor
 
 
-@pytest.fixture
-def basic_repo(repo: Repository) -> Repository:
+@pytest.fixture(name="basic_repo")
+def fixture_basic_repo(repo: Repository) -> Repository:
     bash(
         """
         cat <<EOF >file1
@@ -337,7 +345,7 @@ def test_fixup_order_transitive(repo: Repository) -> None:
     assert tip.persisted
 
     todos = build_todos(commit_range(old, tip), index=None)
-    [target, a, b, c] = autosquash_todos(todos)
+    [target, a, b, c] = autosquash_todos(todos)  # pylint: disable=invalid-name
 
     assert b"target commit" in target.commit.message
     assert b"1.0" in a.commit.message

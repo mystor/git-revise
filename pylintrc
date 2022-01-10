@@ -1,3 +1,11 @@
+[MASTER]
+# Make sure things like "import gitrevise.odb" are resolved to the source
+# when running pylint from the command line or IDE.
+init-hook=
+  import os, sys, pylint.config as plc
+  sys.path.append(os.path.dirname(plc.PYLINTRC))
+
+
 [MESSAGES CONTROL]
 
 disable=
@@ -14,3 +22,13 @@ disable=
     # Currently broken analyses which are also handled (better) by mypy
     class-variable-slots-conflict,
     no-member
+
+good-names=
+  # "Exception as e" is perfectly fine.
+  e,
+  # "with open(…) as f" is idiomatic.
+  f,
+  # Other contextually-unambiguous names.
+  fn,
+  repo,
+  ed
