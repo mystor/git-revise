@@ -3,7 +3,7 @@
 # pylint: disable=wildcard-import
 
 import textwrap
-from conftest import *
+from .conftest import *
 
 
 @pytest.mark.parametrize("target", ["HEAD", "HEAD~", "HEAD~~"])

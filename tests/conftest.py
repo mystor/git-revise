@@ -15,7 +15,7 @@ import pytest
 
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_path
-import dummy_editor  # pylint: disable=wrong-import-order
+from . import dummy_editor
 
 
 @pytest.fixture(name="hermetic_seal", autouse=True)

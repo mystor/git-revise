@@ -2,7 +2,7 @@
 # pylint: disable=unused-wildcard-import
 # pylint: disable=wildcard-import
 
-from conftest import *
+from .conftest import *
 
 
 def test_cut(repo):

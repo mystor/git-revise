@@ -5,7 +5,7 @@
 import os
 from gitrevise.utils import commit_range
 from gitrevise.todo import StepKind, build_todos, autosquash_todos
-from conftest import *  # pylint: disable=wrong-import-order
+from .conftest import *
 
 
 @pytest.fixture(name="basic_repo")

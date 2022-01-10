@@ -3,7 +3,7 @@
 # pylint: disable=not-context-manager
 
 import pytest
-from conftest import *
+from .conftest import *
 
 
 def interactive_reorder_helper(repo, cwd):
