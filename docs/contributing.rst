@@ -16,8 +16,8 @@ checking, :command:`pylint` for linting, :command:`pytest` for testing, and
   $ tox -e py310  # Python 3.10
   
   $ tox -e mypy   # Mypy Typechecking
-  $ tox -e pylint # Linting
-  $ tox -e black  # Check Formatting
+  $ tox -e lint   # Linting
+  $ tox -e format # Check Formatting
 
 Code Formatting
 ---------------
