@@ -1,4 +1,5 @@
 from gitrevise.odb import Repository
+
 from .conftest import bash, editor_main
 
 

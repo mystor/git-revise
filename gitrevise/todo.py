@@ -4,8 +4,8 @@ import re
 from enum import Enum
 from typing import List, Optional
 
-from .odb import Commit, Repository, MissingObject
-from .utils import run_editor, run_sequence_editor, edit_commit_message, cut_commit
+from .odb import Commit, MissingObject, Repository
+from .utils import cut_commit, edit_commit_message, run_editor, run_sequence_editor
 
 
 class StepKind(Enum):

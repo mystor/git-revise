@@ -5,7 +5,6 @@ import sys
 import tempfile
 import textwrap
 import traceback
-
 from concurrent.futures import CancelledError, Future
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -14,25 +13,19 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from types import TracebackType
-from typing import (
-    Generator,
-    Optional,
-    Sequence,
-    Type,
-    Union,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Generator, Optional, Sequence, Type, Union
 
 import pytest
 
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_path
+
 from . import dummy_editor
 
-
 if TYPE_CHECKING:
-    from _typeshed import StrPath
     from typing import Any, Tuple
+
+    from _typeshed import StrPath
 
 
 @pytest.fixture(name="hermetic_seal", autouse=True)

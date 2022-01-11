@@ -1,7 +1,10 @@
 import textwrap
+
 import pytest
+
 from gitrevise.odb import Repository
-from .conftest import bash, main, editor_main
+
+from .conftest import bash, editor_main, main
 
 
 @pytest.mark.parametrize("target", ["HEAD", "HEAD~", "HEAD~~"])

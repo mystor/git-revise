@@ -12,16 +12,15 @@ unmodified trees and blobs when possible.
 
 from __future__ import annotations
 
-from typing import Iterator, Optional, Tuple, TypeVar
-from pathlib import Path
-from subprocess import CalledProcessError
 import hashlib
 import os
 import sys
+from pathlib import Path
+from subprocess import CalledProcessError
+from typing import Iterator, Optional, Tuple, TypeVar
 
-from .odb import Tree, Blob, Commit, Entry, Mode, Repository
+from .odb import Blob, Commit, Entry, Mode, Repository, Tree
 from .utils import edit_file
-
 
 T = TypeVar("T")  # pylint: disable=invalid-name
 
