@@ -230,7 +230,7 @@ def inner_main(args: Namespace, repo: Repository) -> None:
     if args.all:
         repo.git("add", "-u")
     if args.patch:
-        repo.git("add", "-p")
+        repo.git("add", "-p", nocapture=True)
 
     if args.gpg_sign:
         repo.sign_commits = True
