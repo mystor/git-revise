@@ -8,11 +8,10 @@ import hashlib
 import re
 import os
 from typing import (
+    TYPE_CHECKING,
     TypeVar,
     Type,
-    Any,
     Dict,
-    IO,
     Union,
     Sequence,
     Optional,
@@ -30,6 +29,10 @@ from collections import defaultdict
 from tempfile import TemporaryDirectory
 
 
+if TYPE_CHECKING:
+    from subprocess import _FILE
+
+
 class MissingObject(Exception):
     """Exception raised when a commit cannot be found in the ODB"""
 
@@ -45,7 +48,6 @@ class GPGSignError(Exception):
 
 
 T = TypeVar("T")  # pylint: disable=invalid-name
-_FILE = Union[None, int, IO[Any]]
 
 
 class Oid(bytes):
