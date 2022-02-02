@@ -183,7 +183,7 @@ def edit_todos_msgedit(repo: Repository, todos: List[Step]) -> List[Step]:
 
     # Parse the response back into a list of steps
     result = []
-    for full in re.split(br"^\+\+ ", response, flags=re.M)[1:]:
+    for full in re.split(rb"^\+\+ ", response, flags=re.M)[1:]:
         cmd, message = full.split(b"\n", maxsplit=1)
 
         step = Step.parse(repo, cmd.decode(errors="replace").strip())

@@ -221,43 +221,46 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 
 def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
-    assert normalize_conflicted_file(
-        dedent(
-            """\
-            <<<<<<< HEAD
-            a
-            =======
-            b
-            >>>>>>> original thingamabob
+    assert (
+        normalize_conflicted_file(
+            dedent(
+                """\
+                <<<<<<< HEAD
+                a
+                =======
+                b
+                >>>>>>> original thingamabob
 
-            unrelated line
+                unrelated line
 
-            <<<<<<<<<< HEAD
-            c
-            ==========
-            d
-            >>>>>>>>>> longer conflict marker, to be trimmed
-            """
+                <<<<<<<<<< HEAD
+                c
+                ==========
+                d
+                >>>>>>>>>> longer conflict marker, to be trimmed
+                """
+            )
         )
-    ) == (
-        dedent(
-            """\
-            <<<<<<<
-            a
-            =======
-            b
-            >>>>>>>
+        == (
+            dedent(
+                """\
+                <<<<<<<
+                a
+                =======
+                b
+                >>>>>>>
 
-            unrelated line
+                unrelated line
 
-            <<<<<<<
-            c
-            =======
-            d
-            >>>>>>>
-            """
-        ),
-        "3d7cdc2948951408412cc64f3816558407f77e18",
+                <<<<<<<
+                c
+                =======
+                d
+                >>>>>>>
+                """
+            ),
+            "3d7cdc2948951408412cc64f3816558407f77e18",
+        )
     )
 
     # Discard original-text-marker from merge.conflictStyle diff3.
@@ -265,14 +268,14 @@ def test_normalize_conflicted_file() -> None:
         normalize_conflicted_file(
             dedent(
                 """\
-            <<<<<<< theirs
-            a
-            ||||||| common origin
-            b
-            =======
-            c
-            >>>>>>> ours
-            """
+                <<<<<<< theirs
+                a
+                ||||||| common origin
+                b
+                =======
+                c
+                >>>>>>> ours
+                """
             )
         )[0]
         == dedent(
@@ -315,19 +318,19 @@ def test_normalize_conflicted_file() -> None:
         normalize_conflicted_file(
             dedent(
                 """\
-            <<<<<<<
-            outer left
-            <<<<<<<<<<<
-            inner left
-            |||||||||||
-            inner diff3 original section
-            ===========
-            inner right
-            >>>>>>>>>>>
-            =======
-            outer right
-            >>>>>>>
-            """
+                <<<<<<<
+                outer left
+                <<<<<<<<<<<
+                inner left
+                |||||||||||
+                inner diff3 original section
+                ===========
+                inner right
+                >>>>>>>>>>>
+                =======
+                outer right
+                >>>>>>>
+                """
             )
         )[0]
         == dedent(
