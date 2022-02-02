@@ -559,7 +559,7 @@ class Commit(GitObj):
 
         # Parse the header to populate header metadata fields.
         self.parent_oids = []
-        for hdr in re.split(br"\n(?! )", hdrs):
+        for hdr in re.split(rb"\n(?! )", hdrs):
             # Parse out the key-value pairs from the header, handling
             # continuation lines.
             key, value = hdr.split(maxsplit=1)
