@@ -8,6 +8,7 @@ import hashlib
 import re
 import os
 from typing import (
+    TYPE_CHECKING,
     TypeVar,
     Type,
     Dict,
@@ -23,9 +24,13 @@ import sys
 from types import TracebackType
 from pathlib import Path
 from enum import Enum
-from subprocess import Popen, run, PIPE, CalledProcessError
+from subprocess import DEVNULL, Popen, run, PIPE, CalledProcessError
 from collections import defaultdict
 from tempfile import TemporaryDirectory
+
+
+if TYPE_CHECKING:
+    from subprocess import _FILE
 
 
 class MissingObject(Exception):
@@ -217,10 +222,10 @@ class Repository:
         self,
         *cmd: str,
         cwd: Optional[Path] = None,
-        stdin: Optional[bytes] = None,
-        trim_newline: bool = True,
         env: Dict[str, str] = None,
-        nocapture: bool = False,
+        stdin: Optional[bytes] = None,
+        stdout: _FILE = PIPE,
+        trim_newline: bool = True,
     ) -> bytes:
         if cwd is None:
             cwd = getattr(self, "workdir", None)
@@ -228,17 +233,16 @@ class Repository:
         cmd = ("git",) + cmd
         prog = run(
             cmd,
-            stdout=None if nocapture else PIPE,
             cwd=cwd,
             env=env,
             input=stdin,
+            stdout=stdout,
             check=True,
         )
 
-        if nocapture:
-            return b""
-        if trim_newline and prog.stdout.endswith(b"\n"):
-            return prog.stdout[:-1]
+        if trim_newline and isinstance(prog.stdout, bytes):
+            if prog.stdout.endswith(b"\n"):
+                return prog.stdout[:-1]
         return prog.stdout
 
     def config(self, setting: str, default: T) -> Union[bytes, T]:
@@ -769,13 +773,24 @@ class Tree(GitObj):
         entry in the index will have its "Skip Workdir" bit set."""
 
         index = Index(self.repo, path)
-        self.repo.git("read-tree", "--index-output=" + str(path), self.persist().hex())
+        self.repo.git(
+            "read-tree",
+            "--index-output=" + str(path),
+            self.persist().hex(),
+            stdout=DEVNULL,
+        )
 
         # If skip_worktree is set, mark every file as --skip-worktree.
         if skip_worktree:
             # XXX(nika): Could be done with a pipe, which might improve perf.
             files = index.git("ls-files")
-            index.git("update-index", "--skip-worktree", "--stdin", stdin=files)
+            index.git(
+                "update-index",
+                "--skip-worktree",
+                "--stdin",
+                stdin=files,
+                stdout=DEVNULL,
+            )
 
         return index
 
@@ -814,10 +829,10 @@ class Index:
         self,
         *cmd: str,
         cwd: Optional[Path] = None,
-        stdin: Optional[bytes] = None,
-        trim_newline: bool = True,
         env: Optional[Mapping[str, str]] = None,
-        nocapture: bool = False,
+        stdin: Optional[bytes] = None,
+        stdout: _FILE = PIPE,
+        trim_newline: bool = True,
     ) -> bytes:
         """Invoke git with the given index as active"""
         env = dict(**env) if env is not None else dict(**os.environ)
@@ -825,10 +840,10 @@ class Index:
         return self.repo.git(
             *cmd,
             cwd=cwd,
-            stdin=stdin,
-            trim_newline=trim_newline,
             env=env,
-            nocapture=nocapture,
+            stdin=stdin,
+            stdout=stdout,
+            trim_newline=trim_newline,
         )
 
     def tree(self) -> Tree:
@@ -896,5 +911,5 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
         if self.target is not None:
             args.append(str(self.target.oid))
 
-        self.repo.git(*args)
+        self.repo.git(*args, stdout=DEVNULL)
         self.target = new
