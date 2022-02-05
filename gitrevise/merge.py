@@ -375,7 +375,7 @@ def normalize_conflict(
         line = next(lines, None)
         if line is None:
             raise ConflictParseFailed("unexpected eof")
-        if line.startswith(b"<<<<<<<"):
+        if line.startswith(b"<<<<<<< "):
             # parse recursive conflicts, including their processed output in the current hunk
             conflict = normalize_conflict(lines, None)
             if cur_hunk is not None:
@@ -393,7 +393,7 @@ def normalize_conflict(
                     raise ConflictParseFailed("unexpected ======= conflict marker")
                 other_hunk = cur_hunk
             cur_hunk = b""
-        elif line.startswith(b">>>>>>>"):
+        elif line.startswith(b">>>>>>> "):
             # end of conflict. update hasher, and return a normalized conflict
             if cur_hunk is None or other_hunk is None:
                 raise ConflictParseFailed("unexpected >>>>>>> conflict marker")
@@ -426,7 +426,7 @@ def normalize_conflicted_file(body: bytes) -> Tuple[bytes, str]:
         line = next(lines, None)
         if line is None:
             return (normalized, hasher.hexdigest())
-        if line.startswith(b"<<<<<<<"):
+        if line.startswith(b"<<<<<<< "):
             normalized += normalize_conflict(lines, hasher)
         else:
             normalized += line
