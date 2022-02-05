@@ -97,7 +97,7 @@ def strip_comments(
     data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
 ) -> bytes:
     if allow_preceding_whitespace:
-        pat_is_comment_line = re.compile(br"^\s*" + re.escape(commentchar))
+        pat_is_comment_line = re.compile(rb"^\s*" + re.escape(commentchar))
 
         def is_comment_line(line: bytes) -> bool:
             return bool(re.match(pat_is_comment_line, line))
@@ -275,7 +275,7 @@ def cut_commit(commit: Commit) -> Commit:
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into the first part.
-    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", nocapture=True)
+    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", stdout=None)
 
     # Write out the newly created tree.
     mid_tree = index.tree()

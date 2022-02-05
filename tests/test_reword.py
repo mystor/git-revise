@@ -1,5 +1,3 @@
-# pylint: disable=not-context-manager
-
 import textwrap
 import pytest
 from gitrevise.odb import Repository

@@ -1,5 +1,3 @@
-# pylint: disable=not-context-manager
-
 import textwrap
 
 from gitrevise.odb import Repository
@@ -221,43 +219,46 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 
 def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
-    assert normalize_conflicted_file(
-        dedent(
-            """\
-            <<<<<<< HEAD
-            a
-            =======
-            b
-            >>>>>>> original thingamabob
+    assert (
+        normalize_conflicted_file(
+            dedent(
+                """\
+                <<<<<<< HEAD
+                a
+                =======
+                b
+                >>>>>>> original thingamabob
 
-            unrelated line
+                unrelated line
 
-            <<<<<<<<<< HEAD
-            c
-            ==========
-            d
-            >>>>>>>>>> longer conflict marker, to be ignored
-            """
+                <<<<<<<<<< HEAD
+                c
+                ==========
+                d
+                >>>>>>>>>> longer conflict marker, to be ignored
+                """
+            )
         )
-    ) == (
-        dedent(
-            """\
-            <<<<<<<
-            a
-            =======
-            b
-            >>>>>>>
+        == (
+            dedent(
+                """\
+                <<<<<<<
+                a
+                =======
+                b
+                >>>>>>>
 
-            unrelated line
+                unrelated line
 
-            <<<<<<<<<< HEAD
-            c
-            ==========
-            d
-            >>>>>>>>>> longer conflict marker, to be ignored
-            """
-        ),
-        "0630df854874fc5ffb92a197732cce0d8928e898",
+                <<<<<<<<<< HEAD
+                c
+                ==========
+                d
+                >>>>>>>>>> longer conflict marker, to be ignored
+                """
+            ),
+            "0630df854874fc5ffb92a197732cce0d8928e898",
+        )
     )
 
     # Discard original-text-marker from merge.conflictStyle diff3.
@@ -265,14 +266,14 @@ def test_normalize_conflicted_file() -> None:
         normalize_conflicted_file(
             dedent(
                 """\
-            <<<<<<< theirs
-            a
-            ||||||| common origin
-            b
-            =======
-            c
-            >>>>>>> ours
-            """
+                <<<<<<< theirs
+                a
+                ||||||| common origin
+                b
+                =======
+                c
+                >>>>>>> ours
+                """
             )
         )[0]
         == dedent(
@@ -315,19 +316,19 @@ def test_normalize_conflicted_file() -> None:
         normalize_conflicted_file(
             dedent(
                 """\
-            <<<<<<< ours (outer)
-            outer left
-            <<<<<<< ours (inner)
-            inner left
-            |||||||
-            inner diff3 original section
-            =======
-            inner right
-            >>>>>>> theirs (inner)
-            =======
-            outer right
-            >>>>>>> theirs (outer)
-            """
+                <<<<<<< ours (outer)
+                outer left
+                <<<<<<< ours (inner)
+                inner left
+                |||||||
+                inner diff3 original section
+                =======
+                inner right
+                >>>>>>> theirs (inner)
+                =======
+                outer right
+                >>>>>>> theirs (outer)
+                """
             )
         )[0]
         == dedent(
@@ -350,7 +351,6 @@ def test_normalize_conflicted_file() -> None:
 def flip_last_two_commits(repo: Repository, ed: Editor) -> None:
     head = repo.get_commit("HEAD")
     with ed.next_file() as f:
-        assert f.indata
         lines = f.indata.splitlines()
         assert lines[0].startswith(b"pick " + head.parent().oid.short().encode())
         assert lines[1].startswith(b"pick " + head.oid.short().encode())

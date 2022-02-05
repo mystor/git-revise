@@ -1,5 +1,3 @@
-# pylint: disable=not-context-manager
-
 from typing import (
     Optional,
     Sequence,
