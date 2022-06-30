@@ -160,15 +160,17 @@ def cleanup_editor_content(
     data: bytes,
     commentchar: bytes,
     cleanup_mode: EditorCleanupMode,
+    force_cut_after_scissors: bool = False,
     allow_preceding_whitespace: bool = False,
 ) -> bytes:
-    if cleanup_mode == EditorCleanupMode.VERBATIM:
-        return data
-
     lines_list = data.splitlines(keepends=True)
 
-    if cleanup_mode == EditorCleanupMode.SCISSORS:
+    # Force cut after scissors even in verbatim mode
+    if force_cut_after_scissors or cleanup_mode == EditorCleanupMode.SCISSORS:
         lines_list = cut_after_scissors(lines_list, commentchar)
+
+    if cleanup_mode == EditorCleanupMode.VERBATIM:
+        return b"".join(lines_list)
 
     if cleanup_mode == EditorCleanupMode.STRIP:
         lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
@@ -210,6 +212,7 @@ def run_specific_editor(
     text: bytes,
     cleanup_mode: EditorCleanupMode,
     comments: Optional[str] = None,
+    commit_diff: Optional[bytes] = None,
     allow_empty: bool = False,
     allow_whitespace_before_comments: bool = False,
 ) -> bytes:
@@ -228,12 +231,22 @@ def run_specific_editor(
                     handle.write(b" " + comment.encode("utf-8"))
                 handle.write(b"\n")
 
+        if commit_diff:
+            handle.write(commentchar + b"\n")
+            lines = [commentchar + b" " + line.encode() for line in
+                     EditorCleanupMode.SCISSORS.comment.splitlines(keepends=True)]
+            for line in lines:
+                handle.write(line)
+            handle.write(commit_diff)
+
     # Invoke the editor
     data = edit_file_with_editor(editor, path)
     data = cleanup_editor_content(
         data,
         commentchar,
         cleanup_mode,
+        # If diff is appended then git always cuts after the scissors (even when commit.cleanup=verbatim)
+        force_cut_after_scissors=commit_diff is not None,
         allow_preceding_whitespace=allow_whitespace_before_comments,
     )
 
@@ -257,6 +270,7 @@ def run_editor(
     text: bytes,
     cleanup_mode: EditorCleanupMode = EditorCleanupMode.DEFAULT,
     comments: Optional[str] = None,
+    commit_diff: Optional[bytes] = None,
     allow_empty: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
@@ -267,6 +281,7 @@ def run_editor(
         text=text,
         cleanup_mode=cleanup_mode,
         comments=comments,
+        commit_diff=commit_diff,
         allow_empty=allow_empty,
     )
 
@@ -310,6 +325,7 @@ def edit_commit_message(commit: Commit) -> Commit:
 
     cleanup_mode = EditorCleanupMode.from_repository(repo)
     comments = cleanup_mode.comment
+    commit_diff = None
 
     # If the target commit is not a merge commit, produce a diff --stat to
     # include in the commit message comments.
@@ -317,8 +333,18 @@ def edit_commit_message(commit: Commit) -> Commit:
         tree_a = commit.parent_tree().persist().hex()
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
+        verbose = repo.bool_config("commit.verbose", False)
+        if verbose:
+            commit_diff = repo.git("diff", tree_a, tree_b)
 
-    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, cleanup_mode, comments=comments)
+    message = run_editor(
+        repo,
+        "COMMIT_EDITMSG",
+        commit.message,
+        cleanup_mode,
+        comments=comments,
+        commit_diff=commit_diff,
+    )
     return commit.update(message=message)
 
 

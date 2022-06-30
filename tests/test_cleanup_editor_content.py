@@ -100,6 +100,20 @@ def test_scissors() -> None:
     )
 
 
+def test_force_cut_scissors_in_verbatim_mode() -> None:
+    actual = cleanup_editor_content(
+        (
+            "foo\n"
+            f"# {GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR}"
+            "bar\n"
+        ).encode(),
+        b"#",
+        EditorCleanupMode.VERBATIM,
+        force_cut_after_scissors=True
+    )
+    assert actual == b"foo\n"
+
+
 def _do_test(data: bytes, expected_strip: bytes, expected_whitespace: Optional[bytes] = None,
              expected_scissors: Optional[bytes] = None):
     if expected_whitespace is None:
