@@ -20,8 +20,6 @@ def test_leading_empty_lines() -> None:
             b"# bar\n"
         ),
         expected=(
-            b"\n"
-            b"\n"
             b"foo\n"
         ),
     )
@@ -47,7 +45,7 @@ def test_trailing_whitespaces() -> None:
             b"# bar \n"
         ),
         expected=(
-            b"foo \n"
+            b"foo\n"
             b"foo\n"
         )
     )
@@ -63,7 +61,6 @@ def test_consecutive_emtpy_lines() -> None:
         ),
         expected=(
             b"foo\n"
-            b""
             b""
             b"bar\n"
         )
