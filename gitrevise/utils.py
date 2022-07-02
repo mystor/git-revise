@@ -112,6 +112,24 @@ def cleanup_editor_content(
     lines_list = data.splitlines(keepends=True)
     lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
 
+    # Remove trailing whitespace in each line
+    lines_list = [line.rstrip() for line in lines_list]
+    empty_lines = [not line for line in lines_list] + [True]
+
+    # Remove leading empty lines
+    try:
+        start = empty_lines.index(False)
+    except ValueError:
+        start = None
+    lines_list = lines_list[start:]
+    empty_lines = empty_lines[start:]
+
+    # Collapse consecutive empty lines
+    lines_list = [
+        lines_list[cur] + b"\n" for cur in range(len(lines_list))
+        if not (empty_lines[cur] and empty_lines[cur + 1])
+    ]
+
     lines_bytes = b"".join(lines_list)
 
     return remove_trailing_empty_lines(lines_bytes)
