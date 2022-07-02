@@ -92,9 +92,7 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
-def cleanup_editor_content(
-    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
-) -> bytes:
+def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_whitespace: bool):
     if allow_preceding_whitespace:
         pat_is_comment_line = re.compile(rb"^\s*" + re.escape(commentchar))
 
@@ -102,20 +100,25 @@ def cleanup_editor_content(
             return bool(re.match(pat_is_comment_line, line))
 
     else:
-
         def is_comment_line(line: bytes) -> bool:
             return line.startswith(commentchar)
 
-    lines = b""
-    for line in data.splitlines(keepends=True):
-        if not is_comment_line(line):
-            lines += line
+    return [line for line in lines if not is_comment_line(line)]
+
+
+def cleanup_editor_content(
+    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
+) -> bytes:
+    lines_list = data.splitlines(keepends=True)
+    lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
+
+    lines_bytes = b"".join(lines_list)
 
     # Remove trailing empty lines
-    lines = lines.rstrip()
-    if lines != b"":
-        lines += b"\n"
-    return lines
+    lines_bytes = lines_bytes.rstrip()
+    if lines_bytes != b"":
+        lines_bytes += b"\n"
+    return lines_bytes
 
 
 def run_specific_editor(
