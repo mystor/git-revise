@@ -92,7 +92,7 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
-def strip_comments(
+def cleanup_editor_content(
     data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
 ) -> bytes:
     if allow_preceding_whitespace:
@@ -111,6 +111,7 @@ def strip_comments(
         if not is_comment_line(line):
             lines += line
 
+    # Remove trailing empty lines
     lines = lines.rstrip()
     if lines != b"":
         lines += b"\n"
@@ -143,12 +144,11 @@ def run_specific_editor(
 
     # Invoke the editor
     data = edit_file_with_editor(editor, path)
-    if comments:
-        data = strip_comments(
-            data,
-            commentchar,
-            allow_preceding_whitespace=allow_whitespace_before_comments,
-        )
+    data = cleanup_editor_content(
+        data,
+        commentchar,
+        allow_preceding_whitespace=allow_whitespace_before_comments,
+    )
 
     # Produce an error if the file was empty
     if not (allow_empty or data):
