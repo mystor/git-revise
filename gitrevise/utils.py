@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum, auto
 import os
 import re
 import sys
@@ -12,6 +13,47 @@ from .odb import Commit, Oid, Reference, Repository, Tree
 
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
+
+
+GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR = "------------------------ >8 ------------------------\n"
+
+
+class EditorCleanupMode(Enum):
+    """git config commit.cleanup representation"""
+    STRIP = auto()
+    WHITESPACE = auto()
+    VERBATIM = auto()
+    SCISSORS = auto()
+    DEFAULT = STRIP
+
+    @property
+    def comment(self) -> str:
+        return {
+            EditorCleanupMode.STRIP: (
+                "Please enter the commit message for your changes. Lines starting\n"
+                "with '#' will be ignored, and an empty message aborts the commit.\n"
+            ),
+            EditorCleanupMode.SCISSORS: (
+                f"{GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR}"
+                "Do not modify or remove the line above.\n"
+                "Everything below it will be ignored.\n"
+            ),
+        }.get(
+            self,
+            (
+                "Please enter the commit message for your changes. Lines starting\n"
+                "with '#' will be kept; you may remove them yourself if you want to.\n"
+                "An empty message aborts the commit.\n"
+            )
+        )
+
+    @classmethod
+    def from_repository(cls, repo: Repository) -> EditorCleanupMode:
+        cleanup_str = repo.config("commit.cleanup", default=b"default").decode()
+        value = cls.__members__.get(cleanup_str.upper())
+        if value is None:
+            raise ValueError(f"Invalid cleanup mode {cleanup_str}")
+        return value
 
 
 class EditorError(Exception):
@@ -92,6 +134,14 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
+def cut_after_scissors(lines: list[bytes], commentchar: bytes) -> list[bytes]:
+    try:
+        scissors = lines.index(commentchar + b" " + GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR.encode())
+    except ValueError:
+        scissors = None
+    return lines[:scissors]
+
+
 def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_whitespace: bool):
     if allow_preceding_whitespace:
         pat_is_comment_line = re.compile(rb"^\s*" + re.escape(commentchar))
@@ -107,10 +157,21 @@ def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_white
 
 
 def cleanup_editor_content(
-    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
+    data: bytes,
+    commentchar: bytes,
+    cleanup_mode: EditorCleanupMode,
+    allow_preceding_whitespace: bool = False,
 ) -> bytes:
+    if cleanup_mode == EditorCleanupMode.VERBATIM:
+        return data
+
     lines_list = data.splitlines(keepends=True)
-    lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
+
+    if cleanup_mode == EditorCleanupMode.SCISSORS:
+        lines_list = cut_after_scissors(lines_list, commentchar)
+
+    if cleanup_mode == EditorCleanupMode.STRIP:
+        lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
 
     # Remove trailing whitespace in each line
     lines_list = [line.rstrip() for line in lines_list]
@@ -147,6 +208,7 @@ def run_specific_editor(
     repo: Repository,
     filename: str,
     text: bytes,
+    cleanup_mode: EditorCleanupMode,
     comments: Optional[str] = None,
     allow_empty: bool = False,
     allow_whitespace_before_comments: bool = False,
@@ -171,6 +233,7 @@ def run_specific_editor(
     data = cleanup_editor_content(
         data,
         commentchar,
+        cleanup_mode,
         allow_preceding_whitespace=allow_whitespace_before_comments,
     )
 
@@ -192,6 +255,7 @@ def run_editor(
     repo: Repository,
     filename: str,
     text: bytes,
+    cleanup_mode: EditorCleanupMode = EditorCleanupMode.DEFAULT,
     comments: Optional[str] = None,
     allow_empty: bool = False,
 ) -> bytes:
@@ -201,6 +265,7 @@ def run_editor(
         repo=repo,
         filename=filename,
         text=text,
+        cleanup_mode=cleanup_mode,
         comments=comments,
         allow_empty=allow_empty,
     )
@@ -231,6 +296,7 @@ def run_sequence_editor(
         repo=repo,
         filename=filename,
         text=text,
+        cleanup_mode=EditorCleanupMode.DEFAULT,
         comments=comments,
         allow_empty=allow_empty,
         allow_whitespace_before_comments=True,
@@ -241,10 +307,9 @@ def edit_commit_message(commit: Commit) -> Commit:
     """Launch an editor to edit the commit message of ``commit``, returning
     a modified commit"""
     repo = commit.repo
-    comments = (
-        "Please enter the commit message for your changes. Lines starting\n"
-        "with '#' will be ignored, and an empty message aborts the commit.\n"
-    )
+
+    cleanup_mode = EditorCleanupMode.from_repository(repo)
+    comments = cleanup_mode.comment
 
     # If the target commit is not a merge commit, produce a diff --stat to
     # include in the commit message comments.
@@ -253,7 +318,7 @@ def edit_commit_message(commit: Commit) -> Commit:
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
 
-    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, comments=comments)
+    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, cleanup_mode, comments=comments)
     return commit.update(message=message)
 
 
