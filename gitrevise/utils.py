@@ -114,7 +114,10 @@ def cleanup_editor_content(
 
     lines_bytes = b"".join(lines_list)
 
-    # Remove trailing empty lines
+    return remove_trailing_empty_lines(lines_bytes)
+
+
+def remove_trailing_empty_lines(lines_bytes: bytes):
     lines_bytes = lines_bytes.rstrip()
     if lines_bytes != b"":
         lines_bytes += b"\n"
