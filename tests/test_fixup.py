@@ -1,4 +1,3 @@
-import os
 from contextlib import contextmanager
 from typing import (
     Generator,
@@ -137,27 +136,27 @@ def test_fixup_nonhead_conflict(basic_repo: Repository) -> None:
     with editor_main(["HEAD~"], input=b"y\ny\ny\ny\n") as ed:
         with ed.next_file() as f:
             assert f.equals_dedent(
-                f"""\
-                <<<<<<< {os.sep}file1 (new parent): commit1
+                """\
+                <<<<<<< file1 (new parent): commit1
                 Hello, World!
                 How are things?
                 =======
                 conflict
-                >>>>>>> {os.sep}file1 (current): <git index>
+                >>>>>>> file1 (current): <git index>
                 """
             )
             f.replace_dedent("conflict1\n")
 
         with ed.next_file() as f:
             assert f.equals_dedent(
-                f"""\
-                <<<<<<< {os.sep}file1 (new parent): commit1
+                """\
+                <<<<<<< file1 (new parent): commit1
                 conflict1
                 =======
                 Hello, World!
                 Oops, gotta add a new line!
                 How are things?
-                >>>>>>> {os.sep}file1 (current): commit2
+                >>>>>>> file1 (current): commit2
                 """
             )
             f.replace_dedent("conflict2\n")

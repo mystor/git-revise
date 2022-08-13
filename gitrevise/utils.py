@@ -66,8 +66,8 @@ def local_commits(repo: Repository, tip: Commit) -> Tuple[Commit, List[Commit]]:
 
 def edit_file_with_editor(editor: str, path: Path) -> bytes:
     try:
-        cmd = [sh_path(), "-ec", f'{editor} "$@"', editor, path.name]
-        run(cmd, check=True, cwd=path.parent)
+        cmd = [sh_path(), "-ec", f'{editor} "$@"', editor, str(path)]
+        run(cmd, check=True)
     except CalledProcessError as err:
         raise EditorError(f"Editor exited with status {err}") from err
     return path.read_bytes()
