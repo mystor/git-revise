@@ -222,7 +222,7 @@ class Repository:
         self,
         *cmd: str,
         cwd: Optional[Path] = None,
-        env: Dict[str, str] = None,
+        env: Optional[Dict[str, str]] = None,
         stdin: Optional[bytes] = None,
         stdout: _FILE = PIPE,
         trim_newline: bool = True,
