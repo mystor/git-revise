@@ -199,6 +199,7 @@ class EditorFileRequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("content-length"))
         in_data = self.rfile.read(length)
 
+        status, out_data = 500, b"no traceback"
         try:
             # The request is ready. Tell our server, and wait for a reply.
             status, out_data = 200, self.server.await_edit(in_data)

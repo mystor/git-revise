@@ -9,7 +9,6 @@ init-hook=
 [MESSAGES CONTROL]
 
 disable=
-    bad-continuation,
     missing-docstring,
     too-many-arguments,
     too-many-branches,
