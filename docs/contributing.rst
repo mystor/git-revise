@@ -5,8 +5,8 @@ Running Tests
 -------------
 
 :command:`tox` is used to run tests. It will run :command:`mypy` for type
-checking, :command:`pylint` for linting, :command:`pytest` for testing, and
-:command:`black` for code formatting.
+checking, :command:`isort` and :command:`pylint` for linting, :command:`pytest`
+for testing, and :command:`black` for code formatting.
 
 .. code-block:: shell
 
@@ -16,16 +16,17 @@ checking, :command:`pylint` for linting, :command:`pytest` for testing, and
   $ tox -e py310  # Python 3.10
   
   $ tox -e mypy   # Mypy Typechecking
-  $ tox -e pylint # Linting
-  $ tox -e black  # Check Formatting
+  $ tox -e lint   # Linting
+  $ tox -e format # Check Formatting
 
 Code Formatting
 ---------------
 
-This project uses ``black`` for code formatting.
+This project uses ``isort`` and ``black`` for code formatting.
 
 .. code-block:: shell
 
+  $ isort .  # sort imports
   $ black .  # format all python code
 
 Building Documentation

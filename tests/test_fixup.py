@@ -1,14 +1,13 @@
 from contextlib import contextmanager
-from typing import (
-    Generator,
-    Optional,
-    Sequence,
-)
+from typing import Generator, Optional, Sequence
+
 import pytest
+
 from gitrevise.odb import Repository
+from gitrevise.todo import StepKind, autosquash_todos, build_todos
 from gitrevise.utils import commit_range
-from gitrevise.todo import StepKind, build_todos, autosquash_todos
-from .conftest import bash, main, editor_main, Editor
+
+from .conftest import Editor, bash, editor_main, main
 
 
 @pytest.fixture(name="basic_repo")

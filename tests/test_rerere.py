@@ -1,8 +1,9 @@
 import textwrap
 
-from gitrevise.odb import Repository
 from gitrevise.merge import normalize_conflicted_file
-from .conftest import bash, changeline, main, editor_main, Editor
+from gitrevise.odb import Repository
+
+from .conftest import Editor, bash, changeline, editor_main, main
 
 
 def history_with_two_conflicting_commits(auto_update: bool = False) -> None:

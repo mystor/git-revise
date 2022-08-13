@@ -1,12 +1,10 @@
-from typing import (
-    Optional,
-    Sequence,
-    TYPE_CHECKING,
-)
-import pytest
-from gitrevise.odb import Repository
-from .conftest import bash, editor_main
+from typing import TYPE_CHECKING, Optional, Sequence
 
+import pytest
+
+from gitrevise.odb import Repository
+
+from .conftest import bash, editor_main
 
 if TYPE_CHECKING:
     from _typeshed import StrPath

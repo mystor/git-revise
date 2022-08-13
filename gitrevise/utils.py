@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
-from subprocess import run, CalledProcessError
-from pathlib import Path
-import textwrap
-import sys
 import os
 import re
+import sys
+import textwrap
+from pathlib import Path
+from subprocess import CalledProcessError, run
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
-from .odb import Repository, Commit, Tree, Oid, Reference
-
+from .odb import Commit, Oid, Reference, Repository, Tree
 
 if TYPE_CHECKING:
     from subprocess import CompletedProcess

@@ -1,9 +1,12 @@
 import os
 from pathlib import Path
 from subprocess import CalledProcessError
+
 import pytest
+
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_run
+
 from .conftest import bash, main
 
 

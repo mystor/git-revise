@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from typing import Optional, List
+import sys
 from argparse import ArgumentParser, Namespace
 from subprocess import CalledProcessError
-import sys
+from typing import List, Optional
 
-from .odb import Repository, Commit, Reference
+from . import __version__
+from .merge import MergeConflict
+from .odb import Commit, Reference, Repository
+from .todo import apply_todos, autosquash_todos, build_todos, edit_todos
 from .utils import (
     EditorError,
     commit_range,
-    edit_commit_message,
-    update_head,
     cut_commit,
+    edit_commit_message,
     local_commits,
+    update_head,
 )
-from .todo import apply_todos, build_todos, edit_todos, autosquash_todos
-from .merge import MergeConflict
-from . import __version__
 
 
 def build_parser() -> ArgumentParser:

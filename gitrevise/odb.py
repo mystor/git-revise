@@ -5,29 +5,28 @@ Helper classes for reading cached objects from Git's Object Database.
 from __future__ import annotations
 
 import hashlib
-import re
 import os
+import re
+import sys
+from collections import defaultdict
+from enum import Enum
+from pathlib import Path
+from subprocess import DEVNULL, PIPE, CalledProcessError, Popen, run
+from tempfile import TemporaryDirectory
+from types import TracebackType
 from typing import (
     TYPE_CHECKING,
-    TypeVar,
-    Type,
     Dict,
-    Union,
-    Sequence,
-    Optional,
-    Mapping,
     Generic,
+    Mapping,
+    Optional,
+    Sequence,
     Tuple,
+    Type,
+    TypeVar,
+    Union,
     cast,
 )
-import sys
-from types import TracebackType
-from pathlib import Path
-from enum import Enum
-from subprocess import DEVNULL, Popen, run, PIPE, CalledProcessError
-from collections import defaultdict
-from tempfile import TemporaryDirectory
-
 
 if TYPE_CHECKING:
     from subprocess import _FILE
