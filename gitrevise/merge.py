@@ -25,6 +25,16 @@ from .utils import edit_file
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
+# See git/xdiff/xdiff.h
+DEFAULT_CONFLICT_MARKER_SIZE = 7
+
+
+def get_conflict_marker_size(__repo: Repository, __file: Path) -> int:
+    # TODO: Determine on a per-file basis by its `conflict-marker-size` attribute.
+    # See ll_merge_marker_size in git/ll-merge.c
+    return DEFAULT_CONFLICT_MARKER_SIZE
+
+
 class MergeConflict(Exception):
     pass
 
@@ -197,9 +207,12 @@ def merge_blobs(
     base: Optional[Blob],
     other: Blob,
 ) -> Blob:
+    # pylint: disable=too-many-locals
     repo = current.repo
 
     tmpdir = repo.get_tempdir()
+
+    marker_size = get_conflict_marker_size(repo, path)
 
     annotated_labels = (
         f"{path} (new parent): {labels[0]}",
@@ -208,11 +221,12 @@ def merge_blobs(
     )
     (is_clean_merge, merged) = merge_files(
         repo,
+        tmpdir,
+        marker_size,
         annotated_labels,
         current.body,
         base.body if base else b"",
         other.body,
-        tmpdir,
     )
 
     if is_clean_merge:
@@ -226,7 +240,10 @@ def merge_blobs(
 
     preimage = merged
     (normalized_preimage, conflict_id, merged_blob) = replay_recorded_resolution(
-        repo, tmpdir, preimage
+        repo=repo,
+        tmpdir=tmpdir,
+        marker_size=marker_size,
+        preimage=preimage,
     )
     if merged_blob is not None:
         return merged_blob
@@ -245,7 +262,7 @@ def merge_blobs(
     if merged == preimage:
         print("(note) conflicted file is unchanged")
 
-    if b"<<<<<<<" in merged or b"=======" in merged or b">>>>>>>" in merged:
+    if any((marker * marker_size) in merged for marker in (b"<", b"=", b">")):
         print("(note) conflict markers found in the merged file")
 
     # Was the merge successful?
@@ -259,11 +276,12 @@ def merge_blobs(
 
 def merge_files(
     repo: Repository,
+    tmpdir: Path,
+    marker_size: int,
     labels: Tuple[str, str, str],
     current: bytes,
     base: bytes,
     other: bytes,
-    tmpdir: Path,
 ) -> Tuple[bool, bytes]:
     (tmpdir / "current").write_bytes(current)
     (tmpdir / "base").write_bytes(base)
@@ -273,8 +291,13 @@ def merge_files(
     try:
         merged = repo.git(
             "merge-file",
-            "-q",
-            "-p",
+            # Do not print warnings on conflicts.
+            "--quiet",
+            # Send results to stdout instead of overwriting "current file".
+            "--stdout",
+            # Ensure markers are the expected length to ensure consistent rerere results.
+            "--marker-size",
+            str(marker_size),
             f"-L{labels[0]}",
             f"-L{labels[1]}",
             f"-L{labels[2]}",
@@ -295,7 +318,10 @@ def merge_files(
 
 
 def replay_recorded_resolution(
-    repo: Repository, tmpdir: Path, preimage: bytes
+    repo: Repository,
+    tmpdir: Path,
+    marker_size: int,
+    preimage: bytes,
 ) -> Tuple[bytes, Optional[str], Optional[Blob]]:
     rr_cache = repo.git_path("rr-cache")
     if not repo.bool_config(
@@ -304,7 +330,11 @@ def replay_recorded_resolution(
     ):
         return (b"", None, None)
 
-    (normalized_preimage, conflict_id) = normalize_conflicted_file(preimage)
+    (normalized_preimage, conflict_id) = normalize_conflicted_file(
+        marker_size=marker_size,
+        body=preimage,
+    )
+
     conflict_dir = rr_cache / conflict_id
     if not conflict_dir.is_dir():
         return (normalized_preimage, conflict_id, None)
@@ -323,11 +353,12 @@ def replay_recorded_resolution(
 
     (is_clean_merge, merged) = merge_files(
         repo,
+        tmpdir=tmpdir,
+        marker_size=marker_size,
         labels=("recorded postimage", "recorded preimage", "new preimage"),
         current=recorded_postimage,
         base=recorded_preimage,
         other=normalized_preimage,
-        tmpdir=tmpdir,
     )
     if not is_clean_merge:
         # We could ask the user to merge this. However, that could be confusing.
@@ -365,6 +396,7 @@ class ConflictParseFailed(Exception):
 
 
 def normalize_conflict(
+    marker_size: int,
     lines: Iterator[bytes],
     hasher: Optional[hashlib._Hash],
 ) -> bytes:
@@ -374,17 +406,17 @@ def normalize_conflict(
         line = next(lines, None)
         if line is None:
             raise ConflictParseFailed("unexpected eof")
-        if line.startswith(b"<<<<<<< "):
+        if line.startswith((b"<" * marker_size) + b" "):
             # parse recursive conflicts, including their processed output in the current hunk
-            conflict = normalize_conflict(lines, None)
+            conflict = normalize_conflict(marker_size, lines, None)
             if cur_hunk is not None:
                 cur_hunk += conflict
-        elif line.startswith(b"|||||||"):
+        elif line.startswith(b"|" * marker_size):
             # ignore the diff3 original section. Must be still parsing the first hunk.
             if other_hunk is not None:
                 raise ConflictParseFailed("unexpected ||||||| conflict marker")
             (other_hunk, cur_hunk) = (cur_hunk, None)
-        elif line.startswith(b"======="):
+        elif line.startswith(b"=" * marker_size):
             # switch into the second hunk
             # could be in either the diff3 original section or the first hunk
             if cur_hunk is not None:
@@ -392,7 +424,7 @@ def normalize_conflict(
                     raise ConflictParseFailed("unexpected ======= conflict marker")
                 other_hunk = cur_hunk
             cur_hunk = b""
-        elif line.startswith(b">>>>>>> "):
+        elif line.startswith((b">" * marker_size) + b" "):
             # end of conflict. update hasher, and return a normalized conflict
             if cur_hunk is None or other_hunk is None:
                 raise ConflictParseFailed("unexpected >>>>>>> conflict marker")
@@ -403,11 +435,14 @@ def normalize_conflict(
                 hasher.update(hunk2 + b"\0")
             return b"".join(
                 (
-                    b"<<<<<<<\n",
+                    b"<" * marker_size,
+                    b"\n",
                     hunk1,
-                    b"=======\n",
+                    b"=" * marker_size,
+                    b"\n",
                     hunk2,
-                    b">>>>>>>\n",
+                    b">" * marker_size,
+                    b"\n",
                 )
             )
         elif cur_hunk is not None:
@@ -416,7 +451,10 @@ def normalize_conflict(
             cur_hunk += line
 
 
-def normalize_conflicted_file(body: bytes) -> Tuple[bytes, str]:
+def normalize_conflicted_file(
+    marker_size: int,
+    body: bytes,
+) -> Tuple[bytes, str]:
     hasher = hashlib.sha1()
     normalized = b""
 
@@ -425,7 +463,7 @@ def normalize_conflicted_file(body: bytes) -> Tuple[bytes, str]:
         line = next(lines, None)
         if line is None:
             return (normalized, hasher.hexdigest())
-        if line.startswith(b"<<<<<<< "):
-            normalized += normalize_conflict(lines, hasher)
+        if line.startswith((b"<" * marker_size) + b" "):
+            normalized += normalize_conflict(marker_size, lines, hasher)
         else:
             normalized += line
