@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum, auto
 import os
 import re
 import sys
@@ -12,6 +13,47 @@ from .odb import Commit, Oid, Reference, Repository, Tree
 
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
+
+
+GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR = "------------------------ >8 ------------------------\n"
+
+
+class EditorCleanupMode(Enum):
+    """git config commit.cleanup representation"""
+    STRIP = auto()
+    WHITESPACE = auto()
+    VERBATIM = auto()
+    SCISSORS = auto()
+    DEFAULT = STRIP
+
+    @property
+    def comment(self) -> str:
+        return {
+            EditorCleanupMode.STRIP: (
+                "Please enter the commit message for your changes. Lines starting\n"
+                "with '#' will be ignored, and an empty message aborts the commit.\n"
+            ),
+            EditorCleanupMode.SCISSORS: (
+                f"{GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR}"
+                "Do not modify or remove the line above.\n"
+                "Everything below it will be ignored.\n"
+            ),
+        }.get(
+            self,
+            (
+                "Please enter the commit message for your changes. Lines starting\n"
+                "with '#' will be kept; you may remove them yourself if you want to.\n"
+                "An empty message aborts the commit.\n"
+            )
+        )
+
+    @classmethod
+    def from_repository(cls, repo: Repository) -> EditorCleanupMode:
+        cleanup_str = repo.config("commit.cleanup", default=b"default").decode()
+        value = cls.__members__.get(cleanup_str.upper())
+        if value is None:
+            raise ValueError(f"Invalid cleanup mode {cleanup_str}")
+        return value
 
 
 class EditorError(Exception):
@@ -92,9 +134,15 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
     return commentchar
 
 
-def strip_comments(
-    data: bytes, commentchar: bytes, allow_preceding_whitespace: bool
-) -> bytes:
+def cut_after_scissors(lines: list[bytes], commentchar: bytes) -> list[bytes]:
+    try:
+        scissors = lines.index(commentchar + b" " + GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR.encode())
+    except ValueError:
+        scissors = None
+    return lines[:scissors]
+
+
+def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_whitespace: bool):
     if allow_preceding_whitespace:
         pat_is_comment_line = re.compile(rb"^\s*" + re.escape(commentchar))
 
@@ -102,19 +150,59 @@ def strip_comments(
             return bool(re.match(pat_is_comment_line, line))
 
     else:
-
         def is_comment_line(line: bytes) -> bool:
             return line.startswith(commentchar)
 
-    lines = b""
-    for line in data.splitlines(keepends=True):
-        if not is_comment_line(line):
-            lines += line
+    return [line for line in lines if not is_comment_line(line)]
 
-    lines = lines.rstrip()
-    if lines != b"":
-        lines += b"\n"
-    return lines
+
+def cleanup_editor_content(
+    data: bytes,
+    commentchar: bytes,
+    cleanup_mode: EditorCleanupMode,
+    force_cut_after_scissors: bool = False,
+    allow_preceding_whitespace: bool = False,
+) -> bytes:
+    lines_list = data.splitlines(keepends=True)
+
+    # Force cut after scissors even in verbatim mode
+    if force_cut_after_scissors or cleanup_mode == EditorCleanupMode.SCISSORS:
+        lines_list = cut_after_scissors(lines_list, commentchar)
+
+    if cleanup_mode == EditorCleanupMode.VERBATIM:
+        return b"".join(lines_list)
+
+    if cleanup_mode == EditorCleanupMode.STRIP:
+        lines_list = strip_comments(lines_list, commentchar, allow_preceding_whitespace)
+
+    # Remove trailing whitespace in each line
+    lines_list = [line.rstrip() for line in lines_list]
+    empty_lines = [not line for line in lines_list] + [True]
+
+    # Remove leading empty lines
+    try:
+        start = empty_lines.index(False)
+    except ValueError:
+        start = None
+    lines_list = lines_list[start:]
+    empty_lines = empty_lines[start:]
+
+    # Collapse consecutive empty lines
+    lines_list = [
+        lines_list[cur] + b"\n" for cur in range(len(lines_list))
+        if not (empty_lines[cur] and empty_lines[cur + 1])
+    ]
+
+    lines_bytes = b"".join(lines_list)
+
+    return remove_trailing_empty_lines(lines_bytes)
+
+
+def remove_trailing_empty_lines(lines_bytes: bytes):
+    lines_bytes = lines_bytes.rstrip()
+    if lines_bytes != b"":
+        lines_bytes += b"\n"
+    return lines_bytes
 
 
 def run_specific_editor(
@@ -122,7 +210,9 @@ def run_specific_editor(
     repo: Repository,
     filename: str,
     text: bytes,
+    cleanup_mode: EditorCleanupMode,
     comments: Optional[str] = None,
+    commit_diff: Optional[bytes] = None,
     allow_empty: bool = False,
     allow_whitespace_before_comments: bool = False,
 ) -> bytes:
@@ -141,14 +231,24 @@ def run_specific_editor(
                     handle.write(b" " + comment.encode("utf-8"))
                 handle.write(b"\n")
 
+        if commit_diff:
+            handle.write(commentchar + b"\n")
+            lines = [commentchar + b" " + line.encode() for line in
+                     EditorCleanupMode.SCISSORS.comment.splitlines(keepends=True)]
+            for line in lines:
+                handle.write(line)
+            handle.write(commit_diff)
+
     # Invoke the editor
     data = edit_file_with_editor(editor, path)
-    if comments:
-        data = strip_comments(
-            data,
-            commentchar,
-            allow_preceding_whitespace=allow_whitespace_before_comments,
-        )
+    data = cleanup_editor_content(
+        data,
+        commentchar,
+        cleanup_mode,
+        # If diff is appended then git always cuts after the scissors (even when commit.cleanup=verbatim)
+        force_cut_after_scissors=commit_diff is not None,
+        allow_preceding_whitespace=allow_whitespace_before_comments,
+    )
 
     # Produce an error if the file was empty
     if not (allow_empty or data):
@@ -168,7 +268,9 @@ def run_editor(
     repo: Repository,
     filename: str,
     text: bytes,
+    cleanup_mode: EditorCleanupMode = EditorCleanupMode.DEFAULT,
     comments: Optional[str] = None,
+    commit_diff: Optional[bytes] = None,
     allow_empty: bool = False,
 ) -> bytes:
     """Run the editor configured for git to edit the given text"""
@@ -177,7 +279,9 @@ def run_editor(
         repo=repo,
         filename=filename,
         text=text,
+        cleanup_mode=cleanup_mode,
         comments=comments,
+        commit_diff=commit_diff,
         allow_empty=allow_empty,
     )
 
@@ -207,6 +311,7 @@ def run_sequence_editor(
         repo=repo,
         filename=filename,
         text=text,
+        cleanup_mode=EditorCleanupMode.DEFAULT,
         comments=comments,
         allow_empty=allow_empty,
         allow_whitespace_before_comments=True,
@@ -217,10 +322,10 @@ def edit_commit_message(commit: Commit) -> Commit:
     """Launch an editor to edit the commit message of ``commit``, returning
     a modified commit"""
     repo = commit.repo
-    comments = (
-        "Please enter the commit message for your changes. Lines starting\n"
-        "with '#' will be ignored, and an empty message aborts the commit.\n"
-    )
+
+    cleanup_mode = EditorCleanupMode.from_repository(repo)
+    comments = cleanup_mode.comment
+    commit_diff = None
 
     # If the target commit is not a merge commit, produce a diff --stat to
     # include in the commit message comments.
@@ -228,8 +333,18 @@ def edit_commit_message(commit: Commit) -> Commit:
         tree_a = commit.parent_tree().persist().hex()
         tree_b = commit.tree().persist().hex()
         comments += "\n" + repo.git("diff-tree", "--stat", tree_a, tree_b).decode()
+        verbose = repo.bool_config("commit.verbose", False)
+        if verbose:
+            commit_diff = repo.git("diff", tree_a, tree_b)
 
-    message = run_editor(repo, "COMMIT_EDITMSG", commit.message, comments=comments)
+    message = run_editor(
+        repo,
+        "COMMIT_EDITMSG",
+        commit.message,
+        cleanup_mode,
+        comments=comments,
+        commit_diff=commit_diff,
+    )
     return commit.update(message=message)
 
 
