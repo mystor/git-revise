@@ -37,12 +37,10 @@ def test_reuse_recorded_resolution(
     history_with_two_conflicting_commits(auto_update=auto_update)
 
     # Uncached case: Record the user's resolution (in .git/rr-cache/*/preimage).
-    with editor_main(("-i", "HEAD~~"), input=b"y\n" * 4) as ed:
+    with editor_main(("-i", "HEAD~~"), input=b"y\n" * 2) as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
             f.replace_dedent("spam\n")
-        with ed.next_file() as f:
-            f.replace_dedent("eggs spam\n")
 
     tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
     bash("git reset --hard HEAD@{1}")
@@ -51,9 +49,9 @@ def test_reuse_recorded_resolution(
     acceptance_input = None
     intermediate_state = "spam"
     if not auto_update:
-        acceptance_input = b"y\n" * 2
+        acceptance_input = b"y\n"
         if custom_resolution is not None:
-            acceptance_input = b"n\n" + b"y\n" * 4
+            acceptance_input = b"n\n" + b"y\n" * 2
             intermediate_state = custom_resolution
 
     with editor_main(("-i", "HEAD~~"), input=acceptance_input) as ed:
@@ -61,8 +59,6 @@ def test_reuse_recorded_resolution(
         if custom_resolution is not None:
             with ed.next_file() as f:
                 f.replace_dedent(custom_resolution + "\n")
-            with ed.next_file() as f:
-                f.replace_dedent("eggs spam\n")
 
     assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
 
@@ -96,12 +92,10 @@ def test_rerere_merge(repo: Repository) -> None:
     bash("git commit -am 'commit 2'")
 
     # Record a resolution for changing the order of two commits.
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
+    with editor_main(("-i", "HEAD~~"), input=b"y\ny\n") as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
             f.replace_dedent(b"resolved1\n" + 9 * b"x\n")
-        with ed.next_file() as f:
-            f.replace_dedent(b"resolved2\n" + 9 * b"x\n")
     # Go back to the old history so we can try replaying the resolution.
     bash("git reset --hard HEAD@{1}")
 
@@ -124,15 +118,9 @@ def test_rerere_merge(repo: Repository) -> None:
         """\
             @@ -1 +1 @@
             -resolved1
-            +resolved2"""
+            +original2"""
     )
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved2
-        +original2"""
-    )
+    assert uncommitted_changes(repo) == ""
 
 
 def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
@@ -154,25 +142,27 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
         """
     )
 
-    # Now let's try to do the same thing with git-revise, reusing the recorded resolution.
+    # Test reusing the same recorded resolutions with git-revise.
+    # Except the last, that is: The total diff, hence the final state,
+    # of any reordering is a holy invariant.
     with editor_main(("-i", "HEAD~~")) as ed:
         flip_last_two_commits(repo, ed)
 
     assert repo.git("log", "-p", trim_newline=False).decode() == dedent(
         """\
-        commit 44fdce0cf7ae75ed5edac5f3defed83cddf3ec4a
+        commit 31aa1057aca9f039e997fff9396fb9656fb4c01c
         Author: Bash Author <bash_author@example.com>
         Date:   Thu Jul 13 21:40:00 2017 -0500
 
             add eggs
 
         diff --git a/file b/file
-        index 5d0f8a8..cb90548 100644
+        index 5d0f8a8..2481b83 100644
         --- a/file
         +++ b/file
         @@ -1 +1 @@
         -intermediate state
-        +something completely different
+        +eggs spam
 
         commit 1fa5135a6cce1f63dc2f5584ee68e15a4de3a99c
         Author: Bash Author <bash_author@example.com>
