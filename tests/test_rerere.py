@@ -1,5 +1,5 @@
-import textwrap
-from typing import Optional
+from textwrap import dedent
+from typing import Optional, Tuple
 
 import pytest
 
@@ -162,7 +162,7 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
     with editor_main(("-i", "HEAD~~")) as ed:
         flip_last_two_commits(repo, ed)
 
-    assert repo.git("log", "-p", trim_newline=False) == dedent(
+    assert repo.git("log", "-p", trim_newline=False).decode() == dedent(
         """\
         commit dc50430ecbd2d0697ee9266ba6057e0e0b511d7f
         Author: Bash Author <bash_author@example.com>
@@ -212,24 +212,22 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< HEAD
-                a
-                =======
-                b
-                >>>>>>> original thingamabob
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< HEAD
+            a
+            =======
+            b
+            >>>>>>> original thingamabob
 
-                unrelated line
+            unrelated line
 
-                <<<<<<<<<< HEAD
-                c
-                ==========
-                d
-                >>>>>>>>>> longer conflict marker, to be ignored
-                """
-            )
+            <<<<<<<<<< HEAD
+            c
+            ==========
+            d
+            >>>>>>>>>> longer conflict marker, to be ignored
+            """
         )
         == (
             dedent(
@@ -255,18 +253,16 @@ def test_normalize_conflicted_file() -> None:
 
     # Discard original-text-marker from merge.conflictStyle diff3.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< theirs
-                a
-                ||||||| common origin
-                b
-                =======
-                c
-                >>>>>>> ours
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< theirs
+            a
+            ||||||| common origin
+            b
+            =======
+            c
+            >>>>>>> ours
+            """
         )[0]
         == dedent(
             """\
@@ -281,16 +277,14 @@ def test_normalize_conflicted_file() -> None:
 
     # The two sides of the conflict are ordered.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< this way round
-                b
-                =======
-                a
-                >>>>>>> (unsorted)
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< this way round
+            b
+            =======
+            a
+            >>>>>>> (unsorted)
+            """
         )[0]
         == dedent(
             """\
@@ -305,23 +299,21 @@ def test_normalize_conflicted_file() -> None:
 
     # Nested conflict markers.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< ours (outer)
-                outer left
-                <<<<<<< ours (inner)
-                inner left
-                |||||||
-                inner diff3 original section
-                =======
-                inner right
-                >>>>>>> theirs (inner)
-                =======
-                outer right
-                >>>>>>> theirs (outer)
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< ours (outer)
+            outer left
+            <<<<<<< ours (inner)
+            inner left
+            |||||||
+            inner diff3 original section
+            =======
+            inner right
+            >>>>>>> theirs (inner)
+            =======
+            outer right
+            >>>>>>> theirs (outer)
+            """
         )[0]
         == dedent(
             """\
@@ -356,9 +348,11 @@ def flip_last_two_commits(repo: Repository, ed: Editor) -> None:
         )
 
 
-def dedent(text: str) -> bytes:
-    return textwrap.dedent(text).encode()
+def normalize_conflict_dedent(indented_conflict: str) -> Tuple[str, str]:
+    intended_conflict = dedent(indented_conflict).encode()
+    normalized, hexdigest = normalize_conflicted_file(intended_conflict)
+    return (normalized.decode(), hexdigest)
 
 
-def hunks(diff: bytes) -> bytes:
-    return diff[diff.index(b"@@") :]
+def hunks(diff: bytes) -> str:
+    return diff[diff.index(b"@@") :].decode()
