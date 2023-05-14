@@ -1,4 +1,7 @@
 import textwrap
+from typing import Optional
+
+import pytest
 
 from gitrevise.merge import normalize_conflicted_file
 from gitrevise.odb import Repository
@@ -18,11 +21,23 @@ def history_with_two_conflicting_commits(auto_update: bool = False) -> None:
     )
 
 
-def test_reuse_recorded_resolution(repo: Repository) -> None:
-    history_with_two_conflicting_commits(auto_update=True)
+@pytest.mark.parametrize(
+    "auto_update,custom_resolution",
+    [
+        (True, None),
+        (False, None),
+        (False, "custom resolution"),
+    ],
+)
+def test_reuse_recorded_resolution(
+    repo: Repository,
+    auto_update: bool,
+    custom_resolution: Optional[str],
+) -> None:
+    history_with_two_conflicting_commits(auto_update=auto_update)
 
     # Uncached case: Record the user's resolution (in .git/rr-cache/*/preimage).
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
+    with editor_main(("-i", "HEAD~~"), input=b"y\n" * 4) as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
             f.replace_dedent("resolved two\n")
@@ -32,56 +47,30 @@ def test_reuse_recorded_resolution(repo: Repository) -> None:
     tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
     bash("git reset --hard HEAD@{1}")
 
-    # Now we can change the order of the two commits and reuse the recorded conflict resolution.
-    with editor_main(("-i", "HEAD~~")) as ed:
-        flip_last_two_commits(repo, ed)
+    # Cached case: Test auto-using, accepting or declining the recorded resolution.
+    acceptance_input = None
+    state_after_the_second_commit = "resolved one"
+    if not auto_update:
+        acceptance_input = b"y\n" * 2
+        if custom_resolution is not None:
+            # Choose the second commit to get the custom resolution.
+            acceptance_input = b"y\nn\n" + b"y\n" * 2
+            state_after_the_second_commit = custom_resolution
 
-    assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
+    with editor_main(("-i", "HEAD~~"), input=acceptance_input) as ed:
+        flip_last_two_commits(repo, ed)
+        if custom_resolution is not None:
+            with ed.next_file() as f:
+                f.replace_dedent(custom_resolution + "\n")
+
+    if custom_resolution is None:
+        assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
+
     leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
     assert leftover_index == dedent(
-        """\
+        f"""\
         @@ -1 +1 @@
-        -resolved one
-        +two"""
-    )
-
-
-def test_rerere_no_autoupdate(repo: Repository) -> None:
-    history_with_two_conflicting_commits(auto_update=False)
-
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
-        with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
-
-    tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
-    bash("git reset --hard HEAD@{1}")
-
-    # Use the recorded resolution by confirming both times.
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-    assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved one
-        +two"""
-    )
-    bash("git reset --hard HEAD@{1}")
-
-    # Do not use the recorded resolution for the second commit.
-    with editor_main(("-i", "HEAD~~"), input=b"y\nn\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved differently\n")
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved differently
+        -{state_after_the_second_commit}
         +two"""
     )
 
