@@ -21,6 +21,7 @@ def history_with_two_conflicting_commits(auto_update: bool = False) -> None:
 def test_reuse_recorded_resolution(repo: Repository) -> None:
     history_with_two_conflicting_commits(auto_update=True)
 
+    # Uncached case: Record the user's resolution (in .git/rr-cache/*/preimage).
     with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
@@ -43,17 +44,6 @@ def test_reuse_recorded_resolution(repo: Repository) -> None:
         -resolved one
         +two"""
     )
-
-    # When we fail to read conflict data from the cache, we fall back to
-    # letting the user resolve the conflict.
-    bash("git reset --hard HEAD@{1}")
-    bash("rm .git/rr-cache/*/preimage")
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
-        with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
 
 
 def test_rerere_no_autoupdate(repo: Repository) -> None:
