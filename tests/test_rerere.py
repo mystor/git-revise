@@ -49,40 +49,40 @@ def test_reuse_recorded_resolution(
 
     # Cached case: Test auto-using, accepting or declining the recorded resolution.
     acceptance_input = None
-    state_after_the_second_commit = "resolved one"
+    intermediate_state = "resolved two"
     if not auto_update:
         acceptance_input = b"y\n" * 2
         if custom_resolution is not None:
-            # Choose the second commit to get the custom resolution.
-            acceptance_input = b"y\nn\n" + b"y\n" * 2
-            state_after_the_second_commit = custom_resolution
+            acceptance_input = b"n\n" + b"y\n" * 4
+            intermediate_state = custom_resolution
 
     with editor_main(("-i", "HEAD~~"), input=acceptance_input) as ed:
         flip_last_two_commits(repo, ed)
         if custom_resolution is not None:
             with ed.next_file() as f:
                 f.replace_dedent(custom_resolution + "\n")
+            with ed.next_file() as f:
+                f.replace_dedent("resolved one\n")
 
-    if custom_resolution is None:
-        assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
+    assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
 
     assert hunks(repo.git("show", "-U0", "HEAD~")) == dedent(
-        """\
+        f"""\
             @@ -1 +1 @@
             -
-            +resolved two"""
+            +{intermediate_state}"""
     )
     assert hunks(repo.git("show", "-U0", "HEAD")) == dedent(
         f"""\
             @@ -1 +1 @@
-            -resolved two
-            +{state_after_the_second_commit}"""
+            -{intermediate_state}
+            +resolved one"""
     )
     leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
     assert leftover_index == dedent(
-        f"""\
+        """\
         @@ -1 +1 @@
-        -{state_after_the_second_commit}
+        -resolved one
         +two"""
     )
 
