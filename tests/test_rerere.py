@@ -66,6 +66,18 @@ def test_reuse_recorded_resolution(
     if custom_resolution is None:
         assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
 
+    assert hunks(repo.git("show", "-U0", "HEAD~")) == dedent(
+        """\
+            @@ -1 +1 @@
+            -
+            +resolved two"""
+    )
+    assert hunks(repo.git("show", "-U0", "HEAD")) == dedent(
+        f"""\
+            @@ -1 +1 @@
+            -resolved two
+            +{state_after_the_second_commit}"""
+    )
     leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
     assert leftover_index == dedent(
         f"""\
