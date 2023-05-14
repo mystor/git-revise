@@ -15,8 +15,8 @@ def history_with_two_conflicting_commits(auto_update: bool = False) -> None:
         git config rerere.enabled true
         git config rerere.autoUpdate {"true" if auto_update else "false"}
         echo > file; git add file; git commit -m 'initial commit'
-        echo one > file; git commit -am 'commit one'
-        echo two > file; git commit -am 'commit two'
+        echo eggs > file; git commit -am 'add eggs'
+        echo eggs spam > file; git commit -am 'add spam'
         """
     )
 
@@ -26,7 +26,7 @@ def history_with_two_conflicting_commits(auto_update: bool = False) -> None:
     [
         (True, None),
         (False, None),
-        (False, "custom resolution"),
+        (False, "only spam"),
     ],
 )
 def test_reuse_recorded_resolution(
@@ -40,16 +40,16 @@ def test_reuse_recorded_resolution(
     with editor_main(("-i", "HEAD~~"), input=b"y\n" * 4) as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
+            f.replace_dedent("spam\n")
         with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
+            f.replace_dedent("eggs spam\n")
 
     tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
     bash("git reset --hard HEAD@{1}")
 
     # Cached case: Test auto-using, accepting or declining the recorded resolution.
     acceptance_input = None
-    intermediate_state = "resolved two"
+    intermediate_state = "spam"
     if not auto_update:
         acceptance_input = b"y\n" * 2
         if custom_resolution is not None:
@@ -62,7 +62,7 @@ def test_reuse_recorded_resolution(
             with ed.next_file() as f:
                 f.replace_dedent(custom_resolution + "\n")
             with ed.next_file() as f:
-                f.replace_dedent("resolved one\n")
+                f.replace_dedent("eggs spam\n")
 
     assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
 
@@ -76,15 +76,9 @@ def test_reuse_recorded_resolution(
         f"""\
             @@ -1 +1 @@
             -{intermediate_state}
-            +resolved one"""
+            +eggs spam"""
     )
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved one
-        +two"""
-    )
+    assert uncommitted_changes(repo) == ""
 
 
 def test_rerere_merge(repo: Repository) -> None:
@@ -151,9 +145,11 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
         two=$(git rev-parse HEAD)
         git reset --hard HEAD~~
         git cherry-pick "$two" 2>&1 | grep 'could not apply'
-        echo resolved two > file; git add file; GIT_EDITOR=: git cherry-pick --continue
+        echo intermediate state > file
+        git add file; GIT_EDITOR=: git cherry-pick --continue
         git cherry-pick "$one" 2>&1 | grep 'could not apply'
-        echo resolved one > file; git add file; GIT_EDITOR=: git cherry-pick --continue --no-edit
+        echo something completely different > file
+        git add file; GIT_EDITOR=: git cherry-pick --continue --no-edit
         git reset --hard "$two"
         """
     )
@@ -164,33 +160,33 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 
     assert repo.git("log", "-p", trim_newline=False).decode() == dedent(
         """\
-        commit dc50430ecbd2d0697ee9266ba6057e0e0b511d7f
+        commit 44fdce0cf7ae75ed5edac5f3defed83cddf3ec4a
         Author: Bash Author <bash_author@example.com>
         Date:   Thu Jul 13 21:40:00 2017 -0500
 
-            commit one
+            add eggs
 
         diff --git a/file b/file
-        index 474b904..936bcfd 100644
+        index 5d0f8a8..cb90548 100644
         --- a/file
         +++ b/file
         @@ -1 +1 @@
-        -resolved two
-        +resolved one
+        -intermediate state
+        +something completely different
 
-        commit e51ab202e87f0557df78e5273dcedf51f408a468
+        commit 1fa5135a6cce1f63dc2f5584ee68e15a4de3a99c
         Author: Bash Author <bash_author@example.com>
         Date:   Thu Jul 13 21:40:00 2017 -0500
 
-            commit two
+            add spam
 
         diff --git a/file b/file
-        index 8b13789..474b904 100644
+        index 8b13789..5d0f8a8 100644
         --- a/file
         +++ b/file
         @@ -1 +1 @@
         -
-        +resolved two
+        +intermediate state
 
         commit d72132e74176624d6c3e5b6b4f5ef774ff23a1b3
         Author: Bash Author <bash_author@example.com>
@@ -356,3 +352,7 @@ def normalize_conflict_dedent(indented_conflict: str) -> Tuple[str, str]:
 
 def hunks(diff: bytes) -> str:
     return diff[diff.index(b"@@") :].decode()
+
+
+def uncommitted_changes(repo: Repository) -> str:
+    return repo.git("diff", "-U0", "HEAD").decode()
