@@ -10,6 +10,7 @@ SYNOPSIS
 ========
 
 *git revise* [<options>] [<target>]
+*git revise* [<options>] --cut <target> [--] [<pathspec>...]
 
 DESCRIPTION
 ===========
@@ -93,8 +94,9 @@ Main modes of operation
 
 .. option:: -c, --cut
 
-   Interactively select hunks from <target>. The chosen hunks are split into
-   a second commit immediately after the target.
+   Interactively select hunks from <target>, optionally limited by <pathspec>.
+   The chosen hunks are split into a second commit immediately after the
+   target.
 
    After splitting is complete, both commits' messages are edited.
 

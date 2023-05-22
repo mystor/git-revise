@@ -1,3 +1,7 @@
+from textwrap import dedent
+
+import pytest
+
 from gitrevise.odb import Repository
 
 from .conftest import bash, editor_main
@@ -84,3 +88,65 @@ def test_cut_root(repo: Repository) -> None:
 
     assert new_u != new
     assert new_u != prev
+
+
+@pytest.mark.parametrize("pathspec", ["subdir/file2", "file2"])
+def test_cut_pathspec(
+    repo: Repository, monkeypatch: pytest.MonkeyPatch, pathspec: str
+) -> None:
+    bash(
+        """
+        echo "Hello, World" >> file1
+        git add file1
+        git commit -m "commit 1"
+
+        echo "Append f1" >> file1
+        mkdir subdir
+        echo "Make f2" >> subdir/file2
+        git add file1 subdir/file2
+        git commit -m "commit 2"
+        """
+    )
+
+    if pathspec == "file2":
+        monkeypatch.chdir(repo.workdir / "subdir")
+    with editor_main(["--cut", "HEAD", pathspec], input=b"y\n") as ed:
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[1] commit 2\n")
+            f.replace_dedent("extracted changes\n")
+
+        with ed.next_file() as f:
+            assert f.startswith_dedent("[2] commit 2\n")
+            f.replace_dedent("remaining changes\n")
+
+    assert (
+        repo.git("show", "HEAD~", "--format=%s").decode()
+        == dedent(
+            """
+        extracted changes
+
+        diff --git a/subdir/file2 b/subdir/file2
+        new file mode 100644
+        index 0000000..93350fe
+        --- /dev/null
+        +++ b/subdir/file2
+        @@ -0,0 +1 @@
+        +Make f2"""
+        )[1:]
+    )
+
+    assert (
+        repo.git("show", "HEAD", "--format=%s").decode()
+        == dedent(
+            """
+        remaining changes
+
+        diff --git a/file1 b/file1
+        index 3fa0d4b..ada44cf 100644
+        --- a/file1
+        +++ b/file1
+        @@ -1 +1,2 @@
+         Hello, World
+        +Append f1"""
+        )[1:]
+    )
