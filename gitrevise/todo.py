@@ -41,12 +41,12 @@ class StepKind(Enum):
 class Step:
     kind: StepKind
     commit: Commit
-    message: Optional[bytes]
+    message: bytes
 
     def __init__(self, kind: StepKind, commit: Commit) -> None:
         self.kind = kind
         self.commit = commit
-        self.message = None
+        self.message = commit.message
 
     @staticmethod
     def parse(repo: Repository, instr: str) -> Step:
