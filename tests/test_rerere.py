@@ -1,4 +1,7 @@
-import textwrap
+from textwrap import dedent
+from typing import Optional, Tuple
+
+import pytest
 
 from gitrevise.merge import normalize_conflicted_file
 from gitrevise.odb import Repository
@@ -12,88 +15,66 @@ def history_with_two_conflicting_commits(auto_update: bool = False) -> None:
         git config rerere.enabled true
         git config rerere.autoUpdate {"true" if auto_update else "false"}
         echo > file; git add file; git commit -m 'initial commit'
-        echo one > file; git commit -am 'commit one'
-        echo two > file; git commit -am 'commit two'
+        echo eggs > file; git commit -am 'add eggs'
+        echo eggs spam > file; git commit -am 'add spam'
         """
     )
 
 
-def test_reuse_recorded_resolution(repo: Repository) -> None:
-    history_with_two_conflicting_commits(auto_update=True)
+@pytest.mark.parametrize(
+    "auto_update,custom_resolution",
+    [
+        (True, None),
+        (False, None),
+        (False, "only spam"),
+    ],
+)
+def test_reuse_recorded_resolution(
+    repo: Repository,
+    auto_update: bool,
+    custom_resolution: Optional[str],
+) -> None:
+    history_with_two_conflicting_commits(auto_update=auto_update)
 
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
+    # Uncached case: Record the user's resolution (in .git/rr-cache/*/preimage).
+    with editor_main(("-i", "HEAD~~"), input=b"y\n" * 2) as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
-        with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
+            f.replace_dedent("spam\n")
 
     tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
     bash("git reset --hard HEAD@{1}")
 
-    # Now we can change the order of the two commits and reuse the recorded conflict resolution.
-    with editor_main(("-i", "HEAD~~")) as ed:
+    # Cached case: Test auto-using, accepting or declining the recorded resolution.
+    acceptance_input = None
+    intermediate_state = "spam"
+    if not auto_update:
+        acceptance_input = b"y\n"
+        if custom_resolution is not None:
+            acceptance_input = b"n\n" + b"y\n" * 2
+            intermediate_state = custom_resolution
+
+    with editor_main(("-i", "HEAD~~"), input=acceptance_input) as ed:
         flip_last_two_commits(repo, ed)
+        if custom_resolution is not None:
+            with ed.next_file() as f:
+                f.replace_dedent(custom_resolution + "\n")
 
     assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved one
-        +two"""
+
+    assert hunks(repo.git("show", "-U0", "HEAD~")) == dedent(
+        f"""\
+            @@ -1 +1 @@
+            -
+            +{intermediate_state}"""
     )
-
-    # When we fail to read conflict data from the cache, we fall back to
-    # letting the user resolve the conflict.
-    bash("git reset --hard HEAD@{1}")
-    bash("rm .git/rr-cache/*/preimage")
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
-        with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
-
-
-def test_rerere_no_autoupdate(repo: Repository) -> None:
-    history_with_two_conflicting_commits(auto_update=False)
-
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved two\n")
-        with ed.next_file() as f:
-            f.replace_dedent("resolved one\n")
-
-    tree_after_resolving_conflicts = repo.get_commit("HEAD").tree()
-    bash("git reset --hard HEAD@{1}")
-
-    # Use the recorded resolution by confirming both times.
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-    assert tree_after_resolving_conflicts == repo.get_commit("HEAD").tree()
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved one
-        +two"""
+    assert hunks(repo.git("show", "-U0", "HEAD")) == dedent(
+        f"""\
+            @@ -1 +1 @@
+            -{intermediate_state}
+            +eggs spam"""
     )
-    bash("git reset --hard HEAD@{1}")
-
-    # Do not use the recorded resolution for the second commit.
-    with editor_main(("-i", "HEAD~~"), input=b"y\nn\ny\ny\n") as ed:
-        flip_last_two_commits(repo, ed)
-        with ed.next_file() as f:
-            f.replace_dedent("resolved differently\n")
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved differently
-        +two"""
-    )
+    assert uncommitted_changes(repo) == ""
 
 
 def test_rerere_merge(repo: Repository) -> None:
@@ -111,12 +92,10 @@ def test_rerere_merge(repo: Repository) -> None:
     bash("git commit -am 'commit 2'")
 
     # Record a resolution for changing the order of two commits.
-    with editor_main(("-i", "HEAD~~"), input=b"y\ny\ny\ny\n") as ed:
+    with editor_main(("-i", "HEAD~~"), input=b"y\ny\n") as ed:
         flip_last_two_commits(repo, ed)
         with ed.next_file() as f:
             f.replace_dedent(b"resolved1\n" + 9 * b"x\n")
-        with ed.next_file() as f:
-            f.replace_dedent(b"resolved2\n" + 9 * b"x\n")
     # Go back to the old history so we can try replaying the resolution.
     bash("git reset --hard HEAD@{1}")
 
@@ -139,15 +118,9 @@ def test_rerere_merge(repo: Repository) -> None:
         """\
             @@ -1 +1 @@
             -resolved1
-            +resolved2"""
+            +original2"""
     )
-    leftover_index = hunks(repo.git("diff", "-U0", "HEAD"))
-    assert leftover_index == dedent(
-        """\
-        @@ -1 +1 @@
-        -resolved2
-        +original2"""
-    )
+    assert uncommitted_changes(repo) == ""
 
 
 def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
@@ -160,46 +133,50 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
         two=$(git rev-parse HEAD)
         git reset --hard HEAD~~
         git cherry-pick "$two" 2>&1 | grep 'could not apply'
-        echo resolved two > file; git add file; GIT_EDITOR=: git cherry-pick --continue
+        echo intermediate state > file
+        git add file; GIT_EDITOR=: git cherry-pick --continue
         git cherry-pick "$one" 2>&1 | grep 'could not apply'
-        echo resolved one > file; git add file; GIT_EDITOR=: git cherry-pick --continue --no-edit
+        echo something completely different > file
+        git add file; GIT_EDITOR=: git cherry-pick --continue --no-edit
         git reset --hard "$two"
         """
     )
 
-    # Now let's try to do the same thing with git-revise, reusing the recorded resolution.
+    # Test reusing the same recorded resolutions with git-revise.
+    # Except the last, that is: The total diff, hence the final state,
+    # of any reordering is a holy invariant.
     with editor_main(("-i", "HEAD~~")) as ed:
         flip_last_two_commits(repo, ed)
 
-    assert repo.git("log", "-p", trim_newline=False) == dedent(
+    assert repo.git("log", "-p", trim_newline=False).decode() == dedent(
         """\
-        commit dc50430ecbd2d0697ee9266ba6057e0e0b511d7f
+        commit 31aa1057aca9f039e997fff9396fb9656fb4c01c
         Author: Bash Author <bash_author@example.com>
         Date:   Thu Jul 13 21:40:00 2017 -0500
 
-            commit one
+            add eggs
 
         diff --git a/file b/file
-        index 474b904..936bcfd 100644
+        index 5d0f8a8..2481b83 100644
         --- a/file
         +++ b/file
         @@ -1 +1 @@
-        -resolved two
-        +resolved one
+        -intermediate state
+        +eggs spam
 
-        commit e51ab202e87f0557df78e5273dcedf51f408a468
+        commit 1fa5135a6cce1f63dc2f5584ee68e15a4de3a99c
         Author: Bash Author <bash_author@example.com>
         Date:   Thu Jul 13 21:40:00 2017 -0500
 
-            commit two
+            add spam
 
         diff --git a/file b/file
-        index 8b13789..474b904 100644
+        index 8b13789..5d0f8a8 100644
         --- a/file
         +++ b/file
         @@ -1 +1 @@
         -
-        +resolved two
+        +intermediate state
 
         commit d72132e74176624d6c3e5b6b4f5ef774ff23a1b3
         Author: Bash Author <bash_author@example.com>
@@ -221,24 +198,22 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< HEAD
-                a
-                =======
-                b
-                >>>>>>> original thingamabob
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< HEAD
+            a
+            =======
+            b
+            >>>>>>> original thingamabob
 
-                unrelated line
+            unrelated line
 
-                <<<<<<<<<< HEAD
-                c
-                ==========
-                d
-                >>>>>>>>>> longer conflict marker, to be ignored
-                """
-            )
+            <<<<<<<<<< HEAD
+            c
+            ==========
+            d
+            >>>>>>>>>> longer conflict marker, to be ignored
+            """
         )
         == (
             dedent(
@@ -264,18 +239,16 @@ def test_normalize_conflicted_file() -> None:
 
     # Discard original-text-marker from merge.conflictStyle diff3.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< theirs
-                a
-                ||||||| common origin
-                b
-                =======
-                c
-                >>>>>>> ours
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< theirs
+            a
+            ||||||| common origin
+            b
+            =======
+            c
+            >>>>>>> ours
+            """
         )[0]
         == dedent(
             """\
@@ -290,16 +263,14 @@ def test_normalize_conflicted_file() -> None:
 
     # The two sides of the conflict are ordered.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< this way round
-                b
-                =======
-                a
-                >>>>>>> (unsorted)
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< this way round
+            b
+            =======
+            a
+            >>>>>>> (unsorted)
+            """
         )[0]
         == dedent(
             """\
@@ -314,23 +285,21 @@ def test_normalize_conflicted_file() -> None:
 
     # Nested conflict markers.
     assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
-                <<<<<<< ours (outer)
-                outer left
-                <<<<<<< ours (inner)
-                inner left
-                |||||||
-                inner diff3 original section
-                =======
-                inner right
-                >>>>>>> theirs (inner)
-                =======
-                outer right
-                >>>>>>> theirs (outer)
-                """
-            )
+        normalize_conflict_dedent(
+            """\
+            <<<<<<< ours (outer)
+            outer left
+            <<<<<<< ours (inner)
+            inner left
+            |||||||
+            inner diff3 original section
+            =======
+            inner right
+            >>>>>>> theirs (inner)
+            =======
+            outer right
+            >>>>>>> theirs (outer)
+            """
         )[0]
         == dedent(
             """\
@@ -365,9 +334,15 @@ def flip_last_two_commits(repo: Repository, ed: Editor) -> None:
         )
 
 
-def dedent(text: str) -> bytes:
-    return textwrap.dedent(text).encode()
+def normalize_conflict_dedent(indented_conflict: str) -> Tuple[str, str]:
+    intended_conflict = dedent(indented_conflict).encode()
+    normalized, hexdigest = normalize_conflicted_file(intended_conflict)
+    return (normalized.decode(), hexdigest)
 
 
-def hunks(diff: bytes) -> bytes:
-    return diff[diff.index(b"@@") :]
+def hunks(diff: bytes) -> str:
+    return diff[diff.index(b"@@") :].decode()
+
+
+def uncommitted_changes(repo: Repository) -> str:
+    return repo.git("diff", "-U0", "HEAD").decode()

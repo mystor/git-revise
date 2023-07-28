@@ -244,11 +244,23 @@ def edit_todos(
 
 def apply_todos(
     current: Optional[Commit],
-    todos: List[Step],
+    todos_original: List[Step],
+    todos_edited: List[Step],
     reauthor: bool = False,
 ) -> Commit:
-    for step in todos:
-        rebased = step.commit.rebase(current).update(message=step.message)
+    applied_old_commits = set()
+    applied_new_commits = set()
+
+    for known_state, step in zip(todos_original, todos_edited):
+        # Avoid making the user resolve the same conflict twice:
+        # When reordering commits, the final state is known.
+        applied_old_commits.add(known_state.commit.oid)
+        applied_new_commits.add(step.commit.oid)
+        deja_vu = applied_new_commits == applied_old_commits
+        tree_to_keep = known_state.commit.tree() if deja_vu else None
+
+        rebased = step.commit.rebase(current, tree_to_keep).update(message=step.message)
+
         if step.kind == StepKind.PICK:
             current = rebased
         elif step.kind == StepKind.FIXUP:
