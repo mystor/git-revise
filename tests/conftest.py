@@ -13,7 +13,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from types import TracebackType
-from typing import TYPE_CHECKING, Generator, Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Generator, List, Optional, Sequence, Type, Union
 
 import pytest
 
@@ -113,10 +113,13 @@ def main(
     # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
     check: bool = True,
+    capture_output: bool = False,
 ) -> "subprocess.CompletedProcess[bytes]":
     cmd = [sys.executable, "-m", "gitrevise", *args]
-    print("Running", cmd, dict(cwd=cwd, input=input, check=check))
-    return subprocess.run(cmd, cwd=cwd, input=input, check=check)
+    print(f"Running {cmd} {{{cwd=}, {input=}, {check=}, {capture_output=}}}")
+    return subprocess.run(
+        cmd, cwd=cwd, input=input, check=check, capture_output=capture_output
+    )
 
 
 @contextmanager
@@ -125,9 +128,11 @@ def editor_main(
     cwd: Optional["StrPath"] = None,
     # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
+    stdout_stderr_out: Optional[List[bytes]] = None,
 ) -> "Generator[Editor, None, subprocess.CompletedProcess[bytes]]":
     with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed, ThreadPoolExecutor() as tpe:
         host, port = ed.server_address
+        assert isinstance(host, str)  # Satisfy mypy
         editor_cmd = " ".join(
             shlex.quote(p)
             for p in (
@@ -138,8 +143,12 @@ def editor_main(
         )
         monkeypatch.setenv("GIT_EDITOR", editor_cmd)
 
+        capture_output = stdout_stderr_out is not None
+
         # Run the command asynchronously.
-        future = tpe.submit(main, args, cwd=cwd, input=input)
+        future = tpe.submit(
+            main, args, cwd=cwd, input=input, capture_output=capture_output
+        )
 
         # If it fails, cancel anything waiting on `ed.next_file()`.
         def cancel_on_error(future: "Future[Any]") -> None:
@@ -152,7 +161,12 @@ def editor_main(
         # Yield the editor, so that tests can process incoming requests via `ed.next_file()`.
         yield ed
 
-        return future.result()
+        result = future.result()
+        if stdout_stderr_out is not None:
+            # Mutate instead of reassigning the out-argument object
+            # to make the change observable to the caller.
+            stdout_stderr_out += [result.stdout, result.stderr]
+        return result
 
 
 class EditorFile:
@@ -189,7 +203,9 @@ class EditorFileRequestHandler(BaseHTTPRequestHandler):
 
     # pylint: disable=invalid-name
     def do_POST(self) -> None:
-        length = int(self.headers.get("content-length"))
+        content_length = self.headers.get("content-length")
+        assert isinstance(content_length, str)  # Satisfy mypy
+        length = int(content_length)
         in_data = self.rfile.read(length)
 
         status, out_data = 500, b"no traceback"

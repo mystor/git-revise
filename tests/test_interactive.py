@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
 import pytest
 
@@ -343,3 +343,22 @@ def test_interactive_reword(repo: Repository) -> None:
     assert prev_u.tree().entries[b"file2"] == curr.tree().entries[b"file2"]
     assert prev_u.tree().entries[b"file1"] == curr_uu.tree().entries[b"file1"]
     assert prev.tree().entries[b"file1"] == curr_u.tree().entries[b"file1"]
+
+
+@pytest.mark.parametrize("interactive_mode", ["-i", "-ie", "-e"])
+def test_no_changes(repo: Repository, interactive_mode: str) -> None:
+    bash("git commit --allow-empty -m empty")
+    old = repo.get_commit("HEAD")
+    assert old.message == b"empty\n"
+
+    base = "--root" if interactive_mode != "-e" else "HEAD"
+
+    outputs: List[bytes] = []
+    with editor_main([interactive_mode, base], stdout_stderr_out=outputs) as ed:
+        with ed.next_file() as f:
+            f.replace_dedent(f.indata)
+
+    normalized_outputs = [text.decode().replace("\r\n", "\n") for text in outputs]
+    assert normalized_outputs == ["", "(warning) no changes performed\n"]
+    new = repo.get_commit("HEAD")
+    assert new.oid == old.oid
