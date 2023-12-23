@@ -113,10 +113,17 @@ def main(
     # pylint: disable=redefined-builtin
     input: Optional[bytes] = None,
     check: bool = True,
+    capture_output: bool = False,
 ) -> "subprocess.CompletedProcess[bytes]":
     cmd = [sys.executable, "-m", "gitrevise", *args]
-    print("Running", cmd, dict(cwd=cwd, input=input, check=check))
-    return subprocess.run(cmd, cwd=cwd, input=input, check=check)
+    print(
+        "Running",
+        cmd,
+        dict(cwd=cwd, input=input, check=check, capture_output=capture_output),
+    )
+    return subprocess.run(
+        cmd, cwd=cwd, input=input, check=check, capture_output=capture_output
+    )
 
 
 @contextmanager
