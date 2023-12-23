@@ -252,7 +252,7 @@ def update_head(ref: Reference[Commit], new: Commit, expected: Optional[Tree]) -
         )
 
 
-def cut_commit(commit: Commit) -> Commit:
+def cut_commit(commit: Commit, pathspecs: Optional[List[str]] = None) -> Commit:
     """Perform a ``cut`` operation on the given commit, and return the
     modified commit."""
 
@@ -274,7 +274,15 @@ def cut_commit(commit: Commit) -> Commit:
 
     # Run an interactive git-reset to allow picking which pieces of the
     # patch should go into the first part.
-    index.git("reset", "--patch", final_tree.persist().hex(), "--", ".", stdout=None)
+    index.git(
+        "reset",
+        "--patch",
+        final_tree.persist().hex(),
+        "--",
+        *(pathspecs if pathspecs else []),
+        cwd=Path.cwd(),
+        stdout=None,
+    )
 
     # Write out the newly created tree.
     mid_tree = index.tree()

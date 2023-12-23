@@ -19,7 +19,7 @@ from .utils import (
 )
 
 
-def build_parser() -> ArgumentParser:
+def build_parser(allow_pathspecs: bool) -> ArgumentParser:
     parser = ArgumentParser(
         description="""\
         Rebase staged changes onto the given commit, and rewrite history to
@@ -36,6 +36,12 @@ def build_parser() -> ArgumentParser:
         nargs="?",
         help="target commit to apply fixups to",
     )
+    if allow_pathspecs:
+        parser.add_argument(
+            "pathspecs",
+            nargs="*",
+            help="make --cut select only from matching files",
+        )
     parser.add_argument("--ref", default="HEAD", help="reference to update")
     parser.add_argument(
         "--reauthor",
@@ -201,7 +207,7 @@ def noninteractive(
 
     # If the commit should be cut, prompt the user to perform the cut.
     if args.cut:
-        current = cut_commit(current)
+        current = cut_commit(current, args.pathspecs)
 
     # Add or remove GPG signatures.
     if repo.sign_commits != bool(current.gpgsig):
@@ -258,7 +264,9 @@ def inner_main(args: Namespace, repo: Repository) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> None:
-    args = build_parser().parse_args(argv)
+    args = build_parser(allow_pathspecs=True).parse_args(argv)
+    if not args.cut:
+        args = build_parser(allow_pathspecs=False).parse_args(argv)
     try:
         with Repository() as repo:
             inner_main(args, repo)
