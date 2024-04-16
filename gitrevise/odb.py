@@ -328,7 +328,6 @@ class Repository:
         key_id = self.config(
             "user.signingKey", default=self.default_committer.signing_key
         )
-        fmt = self.config("gpg.format", "gpg")
         signer = None
         if self.config("gpg.format", "gpg") == b"ssh":
             program = self.config("gpg.ssh.program", "ssh-keygen")
@@ -338,10 +337,12 @@ class Repository:
             if is_literal_ssh_key and key_id.startswith(b"key::"):
                 key_id = key_id[5:]
             if is_literal_ssh_key:
-                cm = NamedTemporaryFile(prefix=".git_signing_key_tmp")
+                key_file_context_manager = NamedTemporaryFile(
+                    prefix=".git_signing_key_tmp"
+                )
             else:
-                cm = open(key_id, "rb")
-            with cm as key_file:
+                key_file_context_manager = open(key_id, "rb")
+            with key_file_context_manager as key_file:
                 if is_literal_ssh_key:
                     key_file.write(key_id)
                     key_file.flush()
@@ -359,7 +360,10 @@ class Repository:
                     print(f"{program} failed to sign commit", file=sys.stderr)
                     if "usage:" in e:
                         print(
-                            "ssh-keygen -Y sign is needed for ssh signing (available in openssh version 8.2p1+)",
+                            (
+                                "ssh-keygen -Y sign is needed for ssh signing "
+                                "(available in openssh version 8.2p1+)"
+                            ),
                             file=sys.stderr,
                         )
                     raise
