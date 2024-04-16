@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from contextlib import AbstractContextManager
 from enum import Enum
 from pathlib import Path
 from subprocess import DEVNULL, PIPE, CalledProcessError, Popen, run
@@ -330,15 +331,17 @@ class Repository:
         )
         signer = None
         if self.config("gpg.format", "gpg") == b"ssh":
-            program = self.config("gpg.ssh.program", "ssh-keygen")
+            program = self.config("gpg.ssh.program", b"ssh-keygen")
             is_literal_ssh_key = key_id.startswith(b"ssh-") or key_id.startswith(
                 b"key::"
             )
             if is_literal_ssh_key and key_id.startswith(b"key::"):
                 key_id = key_id[5:]
             if is_literal_ssh_key:
-                key_file_context_manager = NamedTemporaryFile(
-                    prefix=".git_signing_key_tmp"
+                key_file_context_manager: AbstractContextManager = (
+                    NamedTemporaryFile(  # pylint: disable=consider-using-with
+                        prefix=".git_signing_key_tmp"
+                    )
                 )
             else:
                 key_file_context_manager = open(key_id, "rb")
@@ -346,7 +349,7 @@ class Repository:
                 if is_literal_ssh_key:
                     key_file.write(key_id)
                     key_file.flush()
-                    key_id = key_file.name
+                    key_id = key_file.name.encode("utf-8")
                 try:
                     args = [program, "-Y", "sign", "-n", "git", "-f", key_id]
                     if is_literal_ssh_key:
@@ -354,10 +357,10 @@ class Repository:
                     signer = sh_run(
                         args, stdout=PIPE, stderr=PIPE, input=buffer, check=True
                     )
-                except CalledProcessError as signer:
-                    e = signer.stderr.decode()
+                except CalledProcessError as ssh:
+                    e = ssh.stderr.decode()
                     print(e, file=sys.stderr, end="")
-                    print(f"{program} failed to sign commit", file=sys.stderr)
+                    print(f"{program.decode()} failed to sign commit", file=sys.stderr)
                     if "usage:" in e:
                         print(
                             (
@@ -376,8 +379,8 @@ class Repository:
                     input=buffer,
                     check=True,
                 )
-            except CalledProcessError as signer:
-                print(signer.stderr.decode(), file=sys.stderr, end="")
+            except CalledProcessError as gpg:
+                print(gpg.stderr.decode(), file=sys.stderr, end="")
                 print("gpg failed to sign commit", file=sys.stderr)
                 raise
 
