@@ -1,5 +1,8 @@
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import Generator
+
+import pytest
 
 from gitrevise.odb import Repository
 from gitrevise.utils import sh_run
@@ -7,24 +10,15 @@ from gitrevise.utils import sh_run
 from .conftest import bash, main
 
 
-def test_sshsign(
-    repo: Repository,
-    short_tmpdir: Path,
-) -> None:
-    def commit_has_ssh_signature(refspec: str) -> bool:
-        commit = repo.get_commit(refspec)
-        assert commit is not None
-        assert commit.gpgsig is not None
-        assert commit.gpgsig.startswith(b"-----BEGIN SSH SIGNATURE-----")
-        return True
-
-    bash("git commit --allow-empty -m 'commit 1'")
-    assert repo.get_commit("HEAD").gpgsig is None
-
+@pytest.fixture(scope="function", name="ssh_private_key_path")
+def fixture_ssh_private_key_path(short_tmpdir: Path) -> Generator[Path, None, None]:
+    """
+    Creates an SSH key and registers it with ssh-agent. De-registers it during cleanup.
+    Yields the Path to the private key file. The corresponding public key file is that path
+    with suffix ".pub".
+    """
     short_tmpdir.chmod(0o700)
     private_key_path = short_tmpdir / "test_sshsign"
-    # Writes to private_key_path and that plus .pub
-    sh_run(["pwd"])
     sh_run(
         [
             "ssh-keygen",
@@ -38,29 +32,47 @@ def test_sshsign(
         ],
         check=True,
     )
-    assert private_key_path.is_file(), "private ssh key file was successfully created"
-    assert private_key_path.with_suffix(
-        ".pub"
-    ).is_file(), "public ssh key file was successfully created"
+
+    assert private_key_path.is_file()
+    pub_key_path = private_key_path.with_suffix(".pub")
+    assert pub_key_path.is_file()
+
+    sh_run(["ssh-add", private_key_path.as_posix()], check=True)
+    yield private_key_path
+    sh_run(["ssh-add", "-d", private_key_path.as_posix()], check=True)
+
+
+def test_sshsign(
+    repo: Repository,
+    ssh_private_key_path: Path,
+) -> None:
+    def commit_has_ssh_signature(refspec: str) -> bool:
+        commit = repo.get_commit(refspec)
+        assert commit is not None
+        assert commit.gpgsig is not None
+        assert commit.gpgsig.startswith(b"-----BEGIN SSH SIGNATURE-----")
+        return True
+
+    bash("git commit --allow-empty -m 'commit 1'")
+    assert repo.get_commit("HEAD").gpgsig is None
 
     bash("git config gpg.format ssh")
     bash("git config commit.gpgSign true")
 
     sh_run(
-        ["git", "config", "user.signingKey", private_key_path.as_posix()],
+        ["git", "config", "user.signingKey", ssh_private_key_path.as_posix()],
         check=True,
     )
     main(["HEAD"])
     assert commit_has_ssh_signature("HEAD"), "can ssh sign given key as path"
 
-    sh_run(["ssh-add", private_key_path.as_posix()], check=True)
-    # todo: cleanup after with ssh-add -d PATH?
+    pubkey = ssh_private_key_path.with_suffix(".pub").read_text().strip()
     sh_run(
         [
             "git",
             "config",
             "user.signingKey",
-            private_key_path.with_suffix(".pub").read_text().strip(),
+            pubkey,
         ],
         check=True,
     )
