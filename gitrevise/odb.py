@@ -884,7 +884,20 @@ class Reference(Generic[GitObjT]):  # pylint: disable=unsubscriptable-object
 
     def __init__(self, obj_type: Type[GitObjT], repo: Repository, name: str) -> None:
         self._type = obj_type
-        self.name = repo.git("rev-parse", "--symbolic-full-name", name).decode()
+
+        self.name = name
+        try:
+            # Silently verify that a ref with the name exists and recover if it
+            # doesn't.
+            repo.git("show-ref", "--quiet", "--verify", self.name)
+        except CalledProcessError:
+            # `name` could be a branch name which can be resolved to a ref. Try
+            # to do so with `rev-parse`, and verify that the new name exists.
+            self.name = repo.git(
+                "rev-parse", "--symbolic-full-name", self.name
+            ).decode()
+            repo.git("show-ref", "--verify", self.name)
+
         self.repo = repo
         self.refresh()
 
