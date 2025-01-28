@@ -1,6 +1,6 @@
 import textwrap
 
-from gitrevise.merge import normalize_conflicted_file
+from gitrevise.merge import DEFAULT_CONFLICT_MARKER_SIZE, normalize_conflicted_file
 from gitrevise.odb import Repository
 
 from .conftest import Editor, bash, changeline, editor_main, main
@@ -222,7 +222,8 @@ def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
     assert (
         normalize_conflicted_file(
-            dedent(
+            marker_size=DEFAULT_CONFLICT_MARKER_SIZE,
+            body=dedent(
                 """\
                 <<<<<<< HEAD
                 a
@@ -238,7 +239,7 @@ def test_normalize_conflicted_file() -> None:
                 d
                 >>>>>>>>>> longer conflict marker, to be ignored
                 """
-            )
+            ),
         )
         == (
             dedent(
@@ -265,7 +266,8 @@ def test_normalize_conflicted_file() -> None:
     # Discard original-text-marker from merge.conflictStyle diff3.
     assert (
         normalize_conflicted_file(
-            dedent(
+            marker_size=DEFAULT_CONFLICT_MARKER_SIZE,
+            body=dedent(
                 """\
                 <<<<<<< theirs
                 a
@@ -275,7 +277,7 @@ def test_normalize_conflicted_file() -> None:
                 c
                 >>>>>>> ours
                 """
-            )
+            ),
         )[0]
         == dedent(
             """\
@@ -291,7 +293,8 @@ def test_normalize_conflicted_file() -> None:
     # The two sides of the conflict are ordered.
     assert (
         normalize_conflicted_file(
-            dedent(
+            marker_size=DEFAULT_CONFLICT_MARKER_SIZE,
+            body=dedent(
                 """\
                 <<<<<<< this way round
                 b
@@ -299,7 +302,7 @@ def test_normalize_conflicted_file() -> None:
                 a
                 >>>>>>> (unsorted)
                 """
-            )
+            ),
         )[0]
         == dedent(
             """\
@@ -315,7 +318,8 @@ def test_normalize_conflicted_file() -> None:
     # Nested conflict markers.
     assert (
         normalize_conflicted_file(
-            dedent(
+            marker_size=DEFAULT_CONFLICT_MARKER_SIZE,
+            body=dedent(
                 """\
                 <<<<<<< ours (outer)
                 outer left
@@ -330,7 +334,7 @@ def test_normalize_conflicted_file() -> None:
                 outer right
                 >>>>>>> theirs (outer)
                 """
-            )
+            ),
         )[0]
         == dedent(
             """\
