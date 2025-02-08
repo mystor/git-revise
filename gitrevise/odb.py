@@ -616,12 +616,16 @@ class Commit(GitObj):
         )
         return " ".join(summary_paragraph.splitlines())
 
-    def rebase(self, parent: Optional[Commit]) -> Commit:
+    def rebase(
+        self,
+        parent: Optional[Commit],
+        tree_to_keep: Optional[Tree] = None,
+    ) -> Commit:
         """Create a new commit with the same changes, except with ``parent``
         as its parent. If ``parent`` is ``None``, this becomes a root commit."""
         from .merge import rebase  # pylint: disable=import-outside-toplevel
 
-        return rebase(self, parent)
+        return rebase(self, parent, tree_to_keep)
 
     def update(
         self,

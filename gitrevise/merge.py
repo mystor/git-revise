@@ -29,7 +29,11 @@ class MergeConflict(Exception):
     pass
 
 
-def rebase(commit: Commit, new_parent: Optional[Commit]) -> Commit:
+def rebase(
+    commit: Commit,
+    new_parent: Optional[Commit],
+    tree_to_keep: Optional[Tree] = None,
+) -> Commit:
     repo = commit.repo
 
     orig_parent = commit.parent() if not commit.is_root else None
@@ -43,13 +47,16 @@ def rebase(commit: Commit, new_parent: Optional[Commit]) -> Commit:
     def get_tree(cmt: Optional[Commit]) -> Tree:
         return cmt.tree() if cmt is not None else Tree(repo, b"")
 
-    tree = merge_trees(
-        Path(),
-        (get_summary(new_parent), get_summary(orig_parent), get_summary(commit)),
-        get_tree(new_parent),
-        get_tree(orig_parent),
-        get_tree(commit),
-    )
+    if tree_to_keep is not None:
+        tree = tree_to_keep
+    else:
+        tree = merge_trees(
+            Path(),
+            (get_summary(new_parent), get_summary(orig_parent), get_summary(commit)),
+            get_tree(new_parent),
+            get_tree(orig_parent),
+            get_tree(commit),
+        )
 
     new_parents = [new_parent] if new_parent is not None else []
 

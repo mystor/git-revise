@@ -138,7 +138,7 @@ def interactive(
 
     if todos != original:
         # Perform the todo list actions.
-        new_head = apply_todos(base, todos, reauthor=args.reauthor)
+        new_head = apply_todos(base, original, todos, reauthor=args.reauthor)
 
         # Update the value of HEAD to the new state.
         update_head(head, new_head, None)
