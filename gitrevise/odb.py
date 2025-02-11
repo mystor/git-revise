@@ -31,6 +31,8 @@ from typing import (
 if TYPE_CHECKING:
     from subprocess import _FILE
 
+    from typing_extensions import Self
+
 
 class MissingObject(Exception):
     """Exception raised when a commit cannot be found in the ODB"""
@@ -57,7 +59,7 @@ class Oid(bytes):
     def __new__(cls, b: bytes) -> Oid:
         if len(b) != 20:
             raise ValueError("Expected 160-bit SHA1 hash")
-        return super().__new__(cls, b)  # type: ignore
+        return super().__new__(cls, b)
 
     @classmethod
     def fromhex(cls, instr: str) -> Oid:
@@ -165,8 +167,8 @@ class Repository:
     """path to GnuPG binary"""
 
     _objects: Dict[int, Dict[Oid, GitObj]]
-    _catfile: Popen
-    _tempdir: Optional[TemporaryDirectory]
+    _catfile: Popen[bytes]
+    _tempdir: Optional[TemporaryDirectory[str]]
 
     __slots__ = [
         "workdir",
@@ -480,7 +482,7 @@ class GitObj:
 
     __slots__ = ("repo", "body", "oid", "persisted")
 
-    def __new__(cls: Type[GitObjT], repo: Repository, body: bytes) -> GitObjT:
+    def __new__(cls, repo: Repository, body: bytes) -> "Self":
         oid = Oid.for_object(cls._git_type(), body)
         cache = repo._objects[oid[0]]  # pylint: disable=protected-access
         if oid in cache:
@@ -495,7 +497,7 @@ class GitObj:
         self.persisted = False
         cache[oid] = self
         self._parse_body()  # pylint: disable=protected-access
-        return cast(GitObjT, self)
+        return self
 
     @classmethod
     def _git_type(cls) -> str:
@@ -834,7 +836,7 @@ class Index:
         trim_newline: bool = True,
     ) -> bytes:
         """Invoke git with the given index as active"""
-        env = dict(**env) if env is not None else dict(**os.environ)
+        env = {**env} if env is not None else {**os.environ}
         env["GIT_INDEX_FILE"] = str(self.index_file)
         return self.repo.git(
             *cmd,

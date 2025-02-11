@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "git-revise"
+dynamic = ["version"]
+requires-python = ">=3.8"
+authors = [{ name = "Nika Layzell", email = "nika@thelayzells.com" }]
+description = "Efficiently update, split, and rearrange git commits"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = ["git", "revise", "rebase", "amend", "fixup"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Environment :: Console",
+  "Topic :: Software Development :: Version Control",
+  "Topic :: Software Development :: Version Control :: Git",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+]
+
+[project.scripts]
+git-revise = "gitrevise.tui:main"
+
+[dependency-groups]
+dev = [
+  "isort~=5.13.2",
+  "mypy~=1.14.1",
+  "pylint~=3.2.7",
+  "pytest-xdist~=3.6.1",
+  "pytest~=8.3.4",
+  "ruff~=0.9.6",
+  "sphinx~=7.1.2",
+  "tox-uv~=1.13.1",
+  "tox~=4.24.1",
+  "twine~=6.1.0",
+  "typing-extensions~=4.12.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/mystor/git-revise/"
+Issues = "https://github.com/mystor/git-revise/issues/"
+Repository = "https://github.com/mystor/git-revise/"
+Documentation = "https://git-revise.readthedocs.io/en/latest/"
+
+[tool.hatch.version]
+path = "gitrevise/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["/gitrevise"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"git-revise.1" = "share/man/man1/git-revise.1"
+
+[tool.hatch.build.targets.sdist]
+include = ["/gitrevise"]
+
+[tool.pylint.messages_control]
+disable = [
+  "missing-docstring",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-branches",
+  "too-many-instance-attributes",
+  "too-many-return-statements",
+  "cyclic-import",
+  "fixme",
+
+  # Currently broken analyses which are also handled (better) by mypy
+  "class-variable-slots-conflict",
+  "no-member",
+]
+
+good-names = [
+  # "Exception as e" is perfectly fine.
+  "e",
+  # "with open(…) as f" is idiomatic.
+  "f",
+  # Other contextually-unambiguous names.
+  "fn",
+  "repo",
+  "ed",
+]
+
+# TODO(https://github.com/astral-sh/ruff/issues/14813): Remove this once ruff properly respects
+# requires-python.
+[tool.ruff]
