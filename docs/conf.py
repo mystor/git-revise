@@ -15,6 +15,8 @@
 import os
 import sys
 
+from sphinx.application import Sphinx
+
 sys.path.insert(0, os.path.abspath(".."))
 
 import gitrevise
@@ -122,5 +124,5 @@ man_pages = [
 # -- Extension configuration -------------------------------------------------
 
 
-def setup(app):
+def setup(app: Sphinx) -> None:
     app.add_object_type("gitconfig", "gitconfig", objname="git config value")
