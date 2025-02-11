@@ -44,20 +44,20 @@ def test_gpgsign(
 
     bash("git config commit.gpgSign true")
     main(["HEAD"])
-    assert (
-        repo.get_commit("HEAD").gpgsig is not None
-    ), "git config commit.gpgSign activates GPG signing"
+    assert repo.get_commit("HEAD").gpgsig is not None, (
+        "git config commit.gpgSign activates GPG signing"
+    )
 
     bash("git config revise.gpgSign false")
     main(["HEAD"])
-    assert (
-        repo.get_commit("HEAD").gpgsig is None
-    ), "git config revise.gpgSign overrides commit.gpgSign"
+    assert repo.get_commit("HEAD").gpgsig is None, (
+        "git config revise.gpgSign overrides commit.gpgSign"
+    )
 
     main(["HEAD", "--gpg-sign"])
-    assert (
-        repo.get_commit("HEAD").gpgsig is not None
-    ), "commandline option overrides configuration"
+    assert repo.get_commit("HEAD").gpgsig is not None, (
+        "commandline option overrides configuration"
+    )
 
     main(["HEAD", "--no-gpg-sign"])
     assert repo.get_commit("HEAD").gpgsig is None, "long option"

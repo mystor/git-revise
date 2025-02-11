@@ -8,7 +8,7 @@ def run_editor(path: Path, url: str) -> None:
         length = int(request.headers.get("content-length"))
         data = request.read(length)
         if request.status != 200:
-            raise Exception(data.decode())
+            raise RuntimeError(data.decode())
     path.write_bytes(data)
 
 

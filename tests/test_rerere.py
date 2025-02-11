@@ -220,10 +220,9 @@ def test_replay_resolution_recorded_by_git(repo: Repository) -> None:
 
 def test_normalize_conflicted_file() -> None:
     # Normalize conflict markers and labels.
-    assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
+    assert normalize_conflicted_file(
+        dedent(
+            """\
                 <<<<<<< HEAD
                 a
                 =======
@@ -238,11 +237,10 @@ def test_normalize_conflicted_file() -> None:
                 d
                 >>>>>>>>>> longer conflict marker, to be ignored
                 """
-            )
         )
-        == (
-            dedent(
-                """\
+    ) == (
+        dedent(
+            """\
                 <<<<<<<
                 a
                 =======
@@ -257,16 +255,14 @@ def test_normalize_conflicted_file() -> None:
                 d
                 >>>>>>>>>> longer conflict marker, to be ignored
                 """
-            ),
-            "0630df854874fc5ffb92a197732cce0d8928e898",
-        )
+        ),
+        "0630df854874fc5ffb92a197732cce0d8928e898",
     )
 
     # Discard original-text-marker from merge.conflictStyle diff3.
-    assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
+    assert normalize_conflicted_file(
+        dedent(
+            """\
                 <<<<<<< theirs
                 a
                 ||||||| common origin
@@ -275,48 +271,42 @@ def test_normalize_conflicted_file() -> None:
                 c
                 >>>>>>> ours
                 """
-            )
-        )[0]
-        == dedent(
-            """\
+        )
+    )[0] == dedent(
+        """\
             <<<<<<<
             a
             =======
             c
             >>>>>>>
             """
-        )
     )
 
     # The two sides of the conflict are ordered.
-    assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
+    assert normalize_conflicted_file(
+        dedent(
+            """\
                 <<<<<<< this way round
                 b
                 =======
                 a
                 >>>>>>> (unsorted)
                 """
-            )
-        )[0]
-        == dedent(
-            """\
+        )
+    )[0] == dedent(
+        """\
             <<<<<<<
             a
             =======
             b
             >>>>>>>
             """
-        )
     )
 
     # Nested conflict markers.
-    assert (
-        normalize_conflicted_file(
-            dedent(
-                """\
+    assert normalize_conflicted_file(
+        dedent(
+            """\
                 <<<<<<< ours (outer)
                 outer left
                 <<<<<<< ours (inner)
@@ -330,10 +320,9 @@ def test_normalize_conflicted_file() -> None:
                 outer right
                 >>>>>>> theirs (outer)
                 """
-            )
-        )[0]
-        == dedent(
-            """\
+        )
+    )[0] == dedent(
+        """\
             <<<<<<<
             outer left
             <<<<<<<
@@ -345,7 +334,6 @@ def test_normalize_conflicted_file() -> None:
             outer right
             >>>>>>>
             """
-        )
     )
 
 
