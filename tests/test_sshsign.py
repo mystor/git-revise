@@ -41,14 +41,20 @@ def fixture_ssh_private_key_path(
     assert pub_key_path.is_file()
 
     # Start the SSH agent and register a private key to it.
-    output = sh_run(["ssh-agent", "-s"], capture_output=True, text=True, check=True)
+    socket_path = short_tmpdir / "ssh-agent.sock"
+    output = sh_run(
+        ["ssh-agent", "-a", socket_path.as_posix(), "-s"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     match = re.search(
-        r"SSH_AUTH_SOCK=(?P<socket>[^;]+).*SSH_AGENT_PID=(?P<pid>\d+)",
+        r"SSH_AGENT_PID=(?P<pid>\d+)",
         output.stdout,
         re.MULTILINE | re.DOTALL,
     )
-    assert match is not None, "Failed to parse output of ssh-agent -s"
-    monkeypatch.setenv("SSH_AUTH_SOCK", match.group("socket"))
+    assert match is not None, "Failed to parse SSH_AGENT_PID from ssh-agent output"
+    monkeypatch.setenv("SSH_AUTH_SOCK", socket_path.as_posix())
     monkeypatch.setenv("SSH_AGENT_PID", match.group("pid"))
 
     sh_run(["ssh-add", private_key_path.as_posix()], check=True)
