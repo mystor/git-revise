@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from enum import Enum, auto
 import os
 import re
 import sys
 import textwrap
+from enum import Enum, auto
 from pathlib import Path
 from subprocess import CalledProcessError, run
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
@@ -15,11 +15,14 @@ if TYPE_CHECKING:
     from subprocess import CompletedProcess
 
 
-GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR = "------------------------ >8 ------------------------\n"
+GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR = (
+    "------------------------ >8 ------------------------\n"
+)
 
 
 class EditorCleanupMode(Enum):
     """git config commit.cleanup representation"""
+
     STRIP = auto()
     WHITESPACE = auto()
     VERBATIM = auto()
@@ -44,7 +47,7 @@ class EditorCleanupMode(Enum):
                 "Please enter the commit message for your changes. Lines starting\n"
                 "with '#' will be kept; you may remove them yourself if you want to.\n"
                 "An empty message aborts the commit.\n"
-            )
+            ),
         )
 
     @classmethod
@@ -136,13 +139,17 @@ def get_commentchar(repo: Repository, text: bytes) -> bytes:
 
 def cut_after_scissors(lines: list[bytes], commentchar: bytes) -> list[bytes]:
     try:
-        scissors = lines.index(commentchar + b" " + GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR.encode())
+        scissors = lines.index(
+            commentchar + b" " + GIT_SCISSOR_LINE_WITHOUT_COMMENT_CHAR.encode()
+        )
     except ValueError:
         scissors = None
     return lines[:scissors]
 
 
-def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_whitespace: bool):
+def strip_comments(
+    lines: list[bytes], commentchar: bytes, allow_preceding_whitespace: bool
+) -> list[bytes]:
     if allow_preceding_whitespace:
         pat_is_comment_line = re.compile(rb"^\s*" + re.escape(commentchar))
 
@@ -150,6 +157,7 @@ def strip_comments(lines: list[bytes], commentchar: bytes, allow_preceding_white
             return bool(re.match(pat_is_comment_line, line))
 
     else:
+
         def is_comment_line(line: bytes) -> bool:
             return line.startswith(commentchar)
 
@@ -189,7 +197,8 @@ def cleanup_editor_content(
 
     # Collapse consecutive empty lines
     lines_list = [
-        lines_list[cur] + b"\n" for cur in range(len(lines_list))
+        lines_list[cur] + b"\n"
+        for cur in range(len(lines_list))
         if not (empty_lines[cur] and empty_lines[cur + 1])
     ]
 
@@ -198,14 +207,14 @@ def cleanup_editor_content(
     return remove_trailing_empty_lines(lines_bytes)
 
 
-def remove_trailing_empty_lines(lines_bytes: bytes):
+def remove_trailing_empty_lines(lines_bytes: bytes) -> bytes:
     lines_bytes = lines_bytes.rstrip()
     if lines_bytes != b"":
         lines_bytes += b"\n"
     return lines_bytes
 
 
-def run_specific_editor(
+def run_specific_editor(  # pylint: disable=too-many-locals
     editor: str,
     repo: Repository,
     filename: str,
@@ -233,8 +242,10 @@ def run_specific_editor(
 
         if commit_diff:
             handle.write(commentchar + b"\n")
-            lines = [commentchar + b" " + line.encode() for line in
-                     EditorCleanupMode.SCISSORS.comment.splitlines(keepends=True)]
+            lines = [
+                commentchar + b" " + line.encode()
+                for line in EditorCleanupMode.SCISSORS.comment.splitlines(keepends=True)
+            ]
             for line in lines:
                 handle.write(line)
             handle.write(commit_diff)
@@ -245,7 +256,8 @@ def run_specific_editor(
         data,
         commentchar,
         cleanup_mode,
-        # If diff is appended then git always cuts after the scissors (even when commit.cleanup=verbatim)
+        # If diff is appended then git always cuts after the scissors
+        # (even when commit.cleanup=verbatim)
         force_cut_after_scissors=commit_diff is not None,
         allow_preceding_whitespace=allow_whitespace_before_comments,
     )

@@ -9,12 +9,14 @@ import os
 import re
 import sys
 from collections import defaultdict
+from contextlib import AbstractContextManager
 from enum import Enum
 from pathlib import Path
 from subprocess import DEVNULL, PIPE, CalledProcessError, Popen, run
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import TracebackType
 from typing import (
+    IO,
     TYPE_CHECKING,
     Dict,
     Generic,
@@ -330,25 +332,66 @@ class Repository:
         key_id = self.config(
             "user.signingKey", default=self.default_committer.signing_key
         )
-        gpg = None
-        try:
-            gpg = sh_run(
-                (self.gpg, "--status-fd=2", "-bsau", key_id),
-                stdout=PIPE,
-                stderr=PIPE,
-                input=buffer,
-                check=True,
+        signer = None
+        if self.config("gpg.format", "gpg") == b"ssh":
+            program = self.config("gpg.ssh.program", b"ssh-keygen")
+            is_literal_ssh_key = key_id.startswith(b"ssh-") or key_id.startswith(
+                b"key::"
             )
-        except CalledProcessError as gpg:
-            print(gpg.stderr.decode(), file=sys.stderr, end="")
-            print("gpg failed to sign commit", file=sys.stderr)
-            raise
+            if is_literal_ssh_key and key_id.startswith(b"key::"):
+                key_id = key_id[5:]
+            if is_literal_ssh_key:
+                key_file_context_manager: AbstractContextManager[IO[bytes]] = (
+                    NamedTemporaryFile(  # pylint: disable=consider-using-with
+                        prefix=".git_signing_key_tmp"
+                    )
+                )
+            else:
+                key_file_context_manager = open(key_id, "rb")
+            with key_file_context_manager as key_file:
+                if is_literal_ssh_key:
+                    key_file.write(key_id)
+                    key_file.flush()
+                    key_id = key_file.name.encode("utf-8")
+                try:
+                    args = [program, "-Y", "sign", "-n", "git", "-f", key_id]
+                    if is_literal_ssh_key:
+                        args.append("-U")
+                    signer = sh_run(
+                        args, stdout=PIPE, stderr=PIPE, input=buffer, check=True
+                    )
+                except CalledProcessError as ssh:
+                    e = ssh.stderr.decode()
+                    print(e, file=sys.stderr, end="")
+                    print(f"{program.decode()} failed to sign commit", file=sys.stderr)
+                    if "usage:" in e:
+                        print(
+                            (
+                                "ssh-keygen -Y sign is needed for ssh signing "
+                                "(available in openssh version 8.2p1+)"
+                            ),
+                            file=sys.stderr,
+                        )
+                    raise
+        else:
+            try:
+                signer = sh_run(
+                    (self.gpg, "--status-fd=2", "-bsau", key_id),
+                    stdout=PIPE,
+                    stderr=PIPE,
+                    input=buffer,
+                    check=True,
+                )
+            except CalledProcessError as gpg:
+                print(gpg.stderr.decode(), file=sys.stderr, end="")
+                print("gpg failed to sign commit", file=sys.stderr)
+                raise
 
-        if b"\n[GNUPG:] SIG_CREATED " not in gpg.stderr:
-            raise GPGSignError(gpg.stderr.decode())
+            if b"\n[GNUPG:] SIG_CREATED " not in signer.stderr:
+                raise GPGSignError(signer.stderr.decode())
 
         signature = b"gpgsig"
-        for line in gpg.stdout.splitlines():
+        for line in signer.stdout.splitlines():
             signature += b" " + line + b"\n"
         return signature
 
