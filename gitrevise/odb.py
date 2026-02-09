@@ -16,6 +16,7 @@ from subprocess import DEVNULL, PIPE, CalledProcessError, Popen, run
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import TracebackType
 from typing import (
+    IO,
     TYPE_CHECKING,
     Dict,
     Generic,
@@ -340,7 +341,7 @@ class Repository:
             if is_literal_ssh_key and key_id.startswith(b"key::"):
                 key_id = key_id[5:]
             if is_literal_ssh_key:
-                key_file_context_manager: AbstractContextManager = (
+                key_file_context_manager: AbstractContextManager[IO[bytes]] = (
                     NamedTemporaryFile(  # pylint: disable=consider-using-with
                         prefix=".git_signing_key_tmp"
                     )
