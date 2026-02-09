@@ -188,7 +188,7 @@ def noninteractive(
 
     # Update the commit message on the target commit if requested.
     if args.message:
-        message = b"\n".join(l.encode("utf-8") + b"\n" for l in args.message)
+        message = b"\n".join(line.encode("utf-8") + b"\n" for line in args.message)
         current = current.update(message=message)
 
     # Prompt the user to edit the commit message if requested.

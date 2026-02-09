@@ -10,14 +10,14 @@ for testing, and :command:`black` for code formatting.
 
 .. code-block:: shell
 
-  $ tox           # All python versions
-  $ tox -e py38   # Python 3.8
-  $ tox -e py39   # Python 3.9
-  $ tox -e py310  # Python 3.10
+  $ uv run tox           # All python versions
+  $ uv run tox -e py38   # Python 3.8
+  $ uv run tox -e py39   # Python 3.9
+  $ uv run tox -e py310  # Python 3.10
   
-  $ tox -e mypy   # Mypy Typechecking
-  $ tox -e lint   # Linting
-  $ tox -e format # Check Formatting
+  $ uv run tox -e mypy   # Mypy Typechecking
+  $ uv run tox -e lint   # Linting
+  $ uv run tox -e format # Check Formatting
 
 Code Formatting
 ---------------
@@ -26,8 +26,8 @@ This project uses ``isort`` and ``black`` for code formatting.
 
 .. code-block:: shell
 
-  $ isort .  # sort imports
-  $ black .  # format all python code
+  $ uv run isort .     # sort imports
+  $ uv run ruff format # format all python code
 
 Building Documentation
 ----------------------
@@ -44,6 +44,6 @@ Publishing
 
 .. code-block:: shell
 
-  $ python3 setup.py sdist bdist_wheel
-  $ twine check dist/*
-  $ twine upload dist/*
+  $ uv build
+  $ uv run twine check dist/*
+  $ uv run twine upload dist/*

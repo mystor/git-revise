@@ -115,7 +115,7 @@ def main(
     check: bool = True,
 ) -> "subprocess.CompletedProcess[bytes]":
     cmd = [sys.executable, "-m", "gitrevise", *args]
-    print("Running", cmd, dict(cwd=cwd, input=input, check=check))
+    print("Running", cmd, {"cwd": cwd, "input": input, "check": check})
     return subprocess.run(cmd, cwd=cwd, input=input, check=check)
 
 
@@ -128,6 +128,7 @@ def editor_main(
 ) -> "Generator[Editor, None, subprocess.CompletedProcess[bytes]]":
     with pytest.MonkeyPatch().context() as monkeypatch, Editor() as ed, ThreadPoolExecutor() as tpe:
         host, port = ed.server_address
+        host = host.decode() if isinstance(host, (bytes, bytearray)) else host
         editor_cmd = " ".join(
             shlex.quote(p)
             for p in (
@@ -150,7 +151,10 @@ def editor_main(
         future.add_done_callback(cancel_on_error)
 
         # Yield the editor, so that tests can process incoming requests via `ed.next_file()`.
-        yield ed
+        try:
+            yield ed
+        except GeneratorExit:
+            pass
 
         return future.result()
 
@@ -189,7 +193,8 @@ class EditorFileRequestHandler(BaseHTTPRequestHandler):
 
     # pylint: disable=invalid-name
     def do_POST(self) -> None:
-        length = int(self.headers.get("content-length"))
+        content_length = self.headers.get("content-length")
+        length = int(content_length) if content_length is not None else 0
         in_data = self.rfile.read(length)
 
         status, out_data = 500, b"no traceback"
@@ -233,7 +238,7 @@ class Editor(HTTPServer):
         try:
             in_data, result_future = self.pending_edits.get(timeout=self.timeout)
         except Empty as e:
-            raise Exception("timeout while waiting for request") from e
+            raise RuntimeError("timeout while waiting for request") from e
 
         if result_future.done() or not result_future.set_running_or_notify_cancel():
             raise result_future.exception() or CancelledError()
