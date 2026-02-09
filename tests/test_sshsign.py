@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Generator
@@ -11,7 +12,9 @@ from .conftest import bash, main
 
 
 @pytest.fixture(scope="function", name="ssh_private_key_path")
-def fixture_ssh_private_key_path(short_tmpdir: Path) -> Generator[Path, None, None]:
+def fixture_ssh_private_key_path(
+    short_tmpdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[Path, None, None]:
     """
     Creates an SSH key and registers it with ssh-agent. De-registers it during cleanup.
     Yields the Path to the private key file. The corresponding public key file is that path
@@ -37,9 +40,22 @@ def fixture_ssh_private_key_path(short_tmpdir: Path) -> Generator[Path, None, No
     pub_key_path = private_key_path.with_suffix(".pub")
     assert pub_key_path.is_file()
 
+    # Start the SSH agent and register a private key to it.
+    output = sh_run(["ssh-agent", "-s"], capture_output=True, text=True, check=True)
+    match = re.search(
+        r"SSH_AUTH_SOCK=(?P<socket>[^;]+).*SSH_AGENT_PID=(?P<pid>\d+)",
+        output.stdout,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match is not None, "Failed to parse output of ssh-agent -s"
+    monkeypatch.setenv("SSH_AUTH_SOCK", match.group("socket"))
+    monkeypatch.setenv("SSH_AGENT_PID", match.group("pid"))
+
     sh_run(["ssh-add", private_key_path.as_posix()], check=True)
     yield private_key_path
     sh_run(["ssh-add", "-d", private_key_path.as_posix()], check=True)
+
+    sh_run(["ssh-agent", "-k"], check=True)
 
 
 def test_sshsign(
