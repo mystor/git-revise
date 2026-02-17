@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .odb import Commit, MissingObject, Repository
 from .utils import cut_commit, edit_commit_message, run_editor, run_sequence_editor
@@ -242,27 +242,63 @@ def edit_todos(
     return result
 
 
+def is_fixup(todo: Step) -> bool:
+    return todo.kind in (StepKind.FIXUP, StepKind.SQUASH)
+
+
+def squash_message_template(
+    target_message: bytes, fixups: List[Tuple[StepKind, bytes]]
+) -> bytes:
+    fused = (
+        b"# This is a combination of %d commits.\n" % (len(fixups) + 1)
+        + b"# This is the 1st commit message:\n"
+        + b"\n"
+        + target_message
+    )
+
+    for index, (kind, message) in enumerate(fixups):
+        fused += b"\n"
+        if kind == StepKind.FIXUP:
+            fused += (
+                b"# The commit message #%d will be skipped:\n" % (index + 2)
+                + b"\n"
+                + b"".join(b"# " + line for line in message.splitlines(keepends=True))
+            )
+        else:
+            assert kind == StepKind.SQUASH
+            fused += b"# This is the commit message #%d:\n\n%s" % (index + 2, message)
+
+    return fused
+
+
 def apply_todos(
     current: Optional[Commit],
     todos: List[Step],
     reauthor: bool = False,
 ) -> Commit:
-    for step in todos:
+    fixups: List[Tuple[StepKind, bytes]] = []
+
+    for index, step in enumerate(todos):
         rebased = step.commit.rebase(current).update(message=step.message)
         if step.kind == StepKind.PICK:
             current = rebased
-        elif step.kind == StepKind.FIXUP:
+        elif is_fixup(step):
             if current is None:
                 raise ValueError("Cannot apply fixup as first commit")
+            if not fixups:
+                fixup_target_message = current.message
+            fixups.append((step.kind, rebased.message))
             current = current.update(tree=rebased.tree())
+            is_last_fixup = index + 1 == len(todos) or not is_fixup(todos[index + 1])
+            if is_last_fixup:
+                if any(kind == StepKind.SQUASH for kind, message in fixups):
+                    current = current.update(
+                        message=squash_message_template(fixup_target_message, fixups)
+                    )
+                    current = edit_commit_message(current)
+                fixups.clear()
         elif step.kind == StepKind.REWORD:
             current = edit_commit_message(rebased)
-        elif step.kind == StepKind.SQUASH:
-            if current is None:
-                raise ValueError("Cannot apply squash as first commit")
-            fused = current.message + b"\n\n" + rebased.message
-            current = current.update(tree=rebased.tree(), message=fused)
-            current = edit_commit_message(current)
         elif step.kind == StepKind.CUT:
             current = cut_commit(rebased)
         elif step.kind == StepKind.INDEX:
