@@ -347,6 +347,7 @@ class Repository:
                     )
                 )
             else:
+                key_id = os.fsencode(Path(os.fsdecode(key_id)).expanduser())
                 key_file_context_manager = open(key_id, "rb")
             with key_file_context_manager as key_file:
                 if is_literal_ssh_key:
