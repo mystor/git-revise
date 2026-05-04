@@ -132,3 +132,28 @@ def test_sshsign(
     main(["HEAD~~", "--gpg-sign"])
     assert commit_has_ssh_signature("HEAD~")
     assert commit_has_ssh_signature("HEAD")
+
+
+def test_sshsign_tilde_in_signing_key(
+    repo: Repository,
+    ssh_private_key_path: Path,
+) -> None:
+    bash("git commit --allow-empty -m 'commit 1'")
+
+    # Place the public key under ~ so we can reference it with a tilde path.
+    # hermetic_seal sets HOME to a temp dir, so Path.home() is safe to write to.
+    ssh_dir = Path.home() / ".ssh"
+    ssh_dir.mkdir(mode=0o700, exist_ok=True)
+    home_pub_key = ssh_dir / "id_ed25519.pub"
+    home_pub_key.write_bytes(ssh_private_key_path.with_suffix(".pub").read_bytes())
+
+    bash("git config gpg.format ssh")
+    bash("git config commit.gpgSign true")
+    sh_run(["git", "config", "user.signingKey", "~/.ssh/id_ed25519.pub"], check=True)
+
+    main(["HEAD"])
+    commit = repo.get_commit("HEAD")
+    assert commit.gpgsig is not None
+    assert commit.gpgsig.startswith(b"-----BEGIN SSH SIGNATURE-----"), (
+        "tilde in user.signingKey should be expanded to the home directory"
+    )
